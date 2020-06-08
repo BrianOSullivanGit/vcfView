@@ -1,0 +1,469 @@
+
+
+body {
+	background-image: url('background.png');
+	background-size: cover;
+}
+
+.form-group {
+	margin-bottom: 8px;
+	color: #000000;
+}
+
+.control-label {
+	margin-top: 0px;
+	margin-bottom: 0px;
+	font-size: 11px;
+	font-weight: 100;
+}
+
+.form-control {
+	width: 100%;
+	height: 23px;
+	padding: 0px 6px;
+}
+
+#targetVcf {
+	margin-top: 5px;
+	overflow: scroll;
+	border: 1px solid #999999;
+}
+
+.selectize-input {
+	padding: 0px 0px;
+	min-height: 18px;
+	line-height: 18px;
+}
+
+.form-control {
+	height: 19px;
+}
+
+.checkbox {
+	margin-top: 0px;
+	margin-bottom: 0px;
+	margin-left: 15px;
+	font-size: 12px;
+	font-weight: 100;
+}
+
+.radio {
+	margin-bottom: 0px;
+}
+
+#showPassedVariants {
+	text-align: left;
+}
+
+#afWindow {
+	margin-top: 0px;
+	margin-bottom: 10px;
+	margin-left: 0px;
+	margin-right: 0px;
+}
+
+input[type=radio] {
+	position: relative !important;
+}
+
+.well {
+	background-color: transparent;
+	padding: 0px;
+	border: 0px;
+	border-shadow: 0 0px 0px;
+	-webkit-box-shadow: 0 0px 0px;
+}
+
+.vcfViewTooltip {
+	position: relative;
+	display: inline-block;
+	zcursor: help;
+	color: #000000;
+}
+
+.vcfViewTooltip .vcfViewTooltiptext {
+	visibility: hidden;
+	position: absolute;
+	width: 240px;
+	background-color: #555;
+	color: #fff;
+	text-align: center;
+	padding: 5px 0;
+	border-radius: 6px;
+	z-index: 1;
+	opacity: 0;
+	transition: opacity .6s;
+}
+
+.vcfViewTooltip:hover .vcfViewTooltiptext {
+	visibility: visible;
+	opacity: 1;
+}
+
+.vcfViewTooltip .vcfViewTooltiptext2 {
+	visibility: hidden;
+	position: absolute;
+	width: 240px;
+	background-color: #555;
+	color: #fff;
+	text-align: center;
+	padding: 5px 0;
+	border-radius: 6px;
+	z-index: 1;
+}
+
+.vcfViewTooltip:hover .vcfViewTooltiptext2 {
+	visibility: visible;
+}
+
+.vcfViewTooltip-right {
+	top: -5px;
+	left: 125%;
+}
+
+.vcfViewTooltip-right2 {
+	top: -5px;
+	left: 105%;
+}
+
+.vcfViewTooltip-right::after {
+	content: '';
+	position: absolute;
+	top: 50%;
+	right: 100%;
+	margin-top: -5px;
+	border-width: 5px;
+	border-style: solid;
+	border-color: transparent #555 transparent transparent;
+}
+
+.vcfViewTooltip-bottom {
+	top: 135%;
+	left: 50%;
+	margin-left: -60px;
+}
+
+.vcfViewTooltip-bottom2 {
+	top: 125%;
+	left: 50%;
+	margin-left: -60px;
+}
+
+.vcfViewTooltip-bottom::after {
+	content: '';
+	position: absolute;
+	bottom: 100%;
+	left: 50%;
+	margin-left: -5px;
+	border-width: 5px;
+	border-style: solid;
+	border-color: transparent transparent #555 transparent;
+}
+
+.vcfViewTooltip-top {
+	bottom: 125%;
+	left: 50%;
+	margin-left: -60px;
+}
+
+.vcfViewTooltip-top2 {
+	bottom: 115%;
+	left: 50%;
+	margin-left: -60px;
+}
+
+.vcfViewTooltip-top::after {
+	content: '';
+	position: absolute;
+	top: 100%;
+	left: 50%;
+	margin-left: -5px;
+	border-width: 5px;
+	border-style: solid;
+	border-color: #555 transparent transparent transparent;
+}
+
+.vcfViewTooltip-left {
+	top: -5px;
+	bottom: auto;
+	right: 128%;
+}
+
+.vcfViewTooltip-left2 {
+	top: -5px;
+	bottom: auto;
+	right: 105%;
+}
+
+.vcfViewTooltip-left::after {
+	content: '';
+	position: absolute;
+	top: 50%;
+	left: 100%;
+	margin-top: -5px;
+	border-width: 5px;
+	border-style: solid;
+	border-color: transparent transparent transparent #555;
+}
+
+.vcfViewTooltip .vcfViewTooltiptext-bottomarrow {
+	visibility: hidden;
+	width: 240px;
+	background-color: #111;
+	color: #fff;
+	text-align: center;
+	border-radius: 6px;
+	padding: 5px 0;
+	position: absolute;
+	z-index: 1;
+	bottom: 130%;
+	left: 50%;
+	margin-left: -60px;
+}
+
+.vcfViewTooltip .vcfViewTooltiptext-bottomarrow::after {
+	content: '';
+	position: absolute;
+	top: 100%;
+	left: 50%;
+	margin-left: -5px;
+	border-width: 5px;
+	border-style: solid;
+	border-color: black transparent transparent transparent;
+}
+
+.vcfViewTooltip:hover .vcfViewTooltiptext-bottomarrow {
+	visibility: visible;
+}
+
+.vcfViewTooltip .vcfViewTooltiptext-toparrow {
+	visibility: hidden;
+	width: 240px;
+	background-color: #111;
+	color: #fff;
+	text-align: center;
+	border-radius: 6px;
+	padding: 5px 0;
+	position: absolute;
+	z-index: 1;
+	top: 150%;
+	left: 50%;
+	margin-left: -60px;
+}
+
+.vcfViewTooltip .vcfViewTooltiptext-toparrow::after {
+	content: '';
+	position: absolute;
+	bottom: 100%;
+	left: 50%;
+	margin-left: -5px;
+	border-width: 5px;
+	border-style: solid;
+	border-color: transparent transparent black transparent;
+}
+
+.vcfViewTooltip:hover .vcfViewTooltiptext-toparrow {
+	visibility: visible;
+}
+
+.vcfViewTooltip .vcfViewTooltiptext-leftarrow {
+	visibility: hidden;
+	width: 240px;
+	background-color: #111;
+	color: #fff;
+	text-align: center;
+	border-radius: 6px;
+	padding: 5px 0;
+	position: absolute;
+	z-index: 1;
+	top: -5px;
+	left: 110%;
+}
+
+.vcfViewTooltip .vcfViewTooltiptext-leftarrow::after {
+	content: '';
+	position: absolute;
+	top: 50%;
+	right: 100%;
+	margin-top: -5px;
+	border-width: 5px;
+	border-style: solid;
+	border-color: transparent black transparent transparent;
+}
+
+.vcfViewTooltip:hover .vcfViewTooltiptext-leftarrow {
+	visibility: visible;
+}
+
+.vcfViewTooltip .vcfViewTooltiptext-rightarrow {
+	visibility: hidden;
+	width: 240px;
+	background-color: #111;
+	color: #fff;
+	text-align: center;
+	border-radius: 6px;
+	padding: 5px 0;
+	position: absolute;
+	z-index: 1;
+	top: -5px;
+	right: 110%;
+}
+
+.vcfViewTooltip .vcfViewTooltiptext-rightarrow::after {
+	content: '';
+	position: absolute;
+	top: 50%;
+	left: 100%;
+	margin-top: -5px;
+	border-width: 5px;
+	border-style: solid;
+	border-color: transparent transparent transparent black;
+}
+
+.vcfViewTooltip:hover .vcfViewTooltiptext-rightarrow {
+	visibility: visible;
+}
+
+.outer {
+	text-align: center;
+	background-color: #F8FFE0;
+	color: #000000;
+	line-height: 1;
+	width: 100%;
+	padding: 0px 0px;
+	font-weight: normal;
+	font-size: 11px;
+	border-radius: 10px;
+	box-sizing: border-box;
+	border: 1px solid #DCA;
+}
+
+#TopOne {
+	position: absolute;
+	top: 2.1%;
+	left: 16%;
+	opacity: 1;
+}
+
+.irs {
+	max-width: 220px;
+	text-align: center;
+	font-size: 12px;
+}
+
+.irs-single {
+	font-size: 9px;
+}
+
+.irs-max {
+	font-size: 9px;
+}
+
+.irs-grid-text {
+	font-size: 8px;
+}
+
+.irs-slider {
+	width: 7px;
+	left: 48.4
+}
+
+
+/* Start with them transparent and as soon as the required ranges are set, make them visable. */
+
+.InvisableAtStart {
+	opacity: 0;
+}
+
+#evReactiveButton {
+	opacity: 1;
+}
+
+
+/* Toggle switch CSS based on https://proto.io/freebies/onoff and www.w3schools.com */
+
+.onoffswitch {
+	position: relative;
+	width: 220px;
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+}
+
+.onoffswitch-checkbox {
+	display: none;
+}
+
+.onoffswitch-label {
+	display: block;
+	overflow: hidden;
+	cursor: pointer;
+	border: 2px solid #999999;
+	border-radius: 14px;
+}
+
+.onoffswitch-inner {
+	display: block;
+	width: 200%;
+	margin-left: -100%;
+	transition: margin 0.3s ease-in 0s;
+}
+
+.onoffswitch-inner:before,
+.onoffswitch-inner:after {
+	display: block;
+	float: left;
+	width: 50%;
+	height: 13px;
+	padding: 0;
+	line-height: 13px;
+	font-size: 13px;
+	color: white;
+	font-family: Trebuchet, Arial, sans-serif;
+	font-weight: bold;
+	box-sizing: border-box;
+}
+
+.onoffswitch-inner:before {
+	content: 'Displaying remaining variants.';
+	text-align: left;
+	padding-left: 5px;
+	background-color: #34A7C1;
+	color: #FFFFFF;
+}
+
+.onoffswitch-inner:after {
+	content: 'Displaying excluded variants.';
+	padding-right: 10px;
+	background-color: #EEEEEE;
+	color: #999999;
+	text-align: right;
+}
+
+.onoffswitch-switch {
+	box-sizing: content-box;
+	line-height: normal;
+	position: static;
+	display: block;
+	width: 12px;
+	height: 11px;
+	margin: 1px;
+	background: #FFFFFF;
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	right: 183px;
+	border: 2px solid #999999;
+	border-radius: 14px;
+	transition: all 0.3s ease-in 0s;
+}
+
+.onoffswitch-checkbox:checked+.onoffswitch-label .onoffswitch-inner {
+	margin-left: 0;
+}
+
+.onoffswitch-checkbox:checked+.onoffswitch-label .onoffswitch-switch {
+	right: 0px;
+}
+
+
