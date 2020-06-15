@@ -1,5 +1,5 @@
 # vcfView
-# Graphical tool to view, plot and re-filter a VCF.
+# Graphical tool to view, plot, process and re-filter a VCF.
 
 
 # Make sure the required libraries are installed.
@@ -8,27 +8,14 @@ if (!requireNamespace("shiny", quietly = TRUE))
   BiocManager::install("shiny")
 if (!requireNamespace("ggplot2", quietly = TRUE))
   BiocManager::install("ggplot2")
-
-#if (!requireNamespace("systemfonts", quietly = TRUE))
-#  BiocManager::install("systemfonts")
-#if (!requireNamespace("gdtools", quietly = TRUE))
-#  BiocManager::install("gdtools")
-#if (!requireNamespace("svglite", quietly = TRUE))
-#  BiocManager::install("svglite")
-
-
-
 if (!requireNamespace("VariantAnnotation", quietly = TRUE))
   BiocManager::install("VariantAnnotation")
 if (!requireNamespace("org.Hs.eg.db", quietly = TRUE))
   BiocManager::install("org.Hs.eg.db")
 if (!requireNamespace("annotate", quietly = TRUE))
   BiocManager::install("annotate")
-#if (!requireNamespace("MutationalPatterns", quietly = TRUE))
-#  BiocManager::install("MutationalPatterns")
 if (!requireNamespace("reshape", quietly = TRUE))
   BiocManager::install("reshape")
-
 if (!requireNamespace("pracma", quietly = TRUE))
   BiocManager::install("pracma")
 if (!requireNamespace("neutralitytestr", quietly = TRUE))
@@ -41,19 +28,15 @@ library("ggplot2")
 library(VariantAnnotation)
 library('org.Hs.eg.db')
 library(annotate)
-# library(MutationalPatterns)
 library(reshape)  # For melt() function.
 library("pracma") # For lsqnonneg()
 
-# Loaded later as required...
-#library("BSgenome.Hsapiens.UCSC.hg38")
-#library("TxDb.Hsapiens.UCSC.hg38.knownGene")
 library("ggrepel")
 library(neutralitytestr)
 
 
-# Track change in afWindow type and afMax/Min freq range.
-previousAfWindowType <<- ""
+# Track change in Max/Min AF freq range.
+# We do this to avoid making the AF density plot reactive to these values.
 previousMinF <<- 0
 previousMaxF <<- 0
 
@@ -104,16 +87,9 @@ filterCheckboxHtml <- function(inputId, value, helpText) {
 
 updateGeneSelectionList <- function(session, gChoices, currentGeneSelected)
 {   
-  print(">>>>>>>>>gChoices<<<<<<<<<<")
-  print(head(gChoices))
-  print(length(gChoices))
-  print(">>>>>>>>>currentGeneSelected<<<<<<<<<<")
-  print(currentGeneSelected)
-  print(length(currentGeneSelected))
-  print("______________________________________")
   
-  if(is.na(gChoices))
-  {  print(">>>>>>REALLY URHERE<<<<<<<<")
+  if(any(is.na(gChoices)))
+  {
     updateSelectizeInput(session,"geneList", choices = c("None Found"))
     return()
   }
@@ -125,23 +101,7 @@ updateGeneSelectionList <- function(session, gChoices, currentGeneSelected)
     
     # Make sure there is something to update it with.
     if(length(gChoices) > 0)
-    {  
-      print(">>>>>>>UPDATING geneList<<<<<<<<<<<<<<")
-      print(head(gChoices))
-      
-      print(">>>>>>>>>>>>>>>>>>currentGeneSelected<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<")
-      print("--------------------------------------")
-      print(currentGeneSelected)
-      print("--------------------------------------")
-      print(head(gChoices))
-      print("--------------------------------------")
-      print(any(is.na(gChoices)))
-      print(sum(is.na(gChoices)))
-      print("--------------------------------------")
-      print(any(gChoices == currentGeneSelected))
-      print(">>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<")
-      
-      
+    {    
       # Make sure the current choice remains the current choice if still possible.
       # If not, let it take the default from the new list.
       if(any(gChoices == currentGeneSelected))
@@ -161,23 +121,8 @@ updateGeneSelectionList <- function(session, gChoices, currentGeneSelected)
 # Function returns the Max bin depth that has been plotted on a density plot.
 maxMedianBinDepth <- function(nBins, result)
 {
-  print("and in here.......")  
-  print(length(result$AF))
-  
-  print(length(which(result$AF>1)))
-  print(length(which(result$AF<0)))
-  print(length(which(result$AF<1)))
-  print(length(which(is.na(result$AF))))
-  
-  print("is.na(result$AF).......................")
-  print(head(result[which(is.na(result$AF)),],3))
-  print(".......................................")
-  
-  
   
   g=ggplot(result, aes(x = AF, y = ..density..)) + geom_histogram(bins=nBins)
-  
-  
   
   # Create gg build object to examine the details of this plot (bins/breaks etc.).
   gg_bd=ggplot_build(g)$data[[1]]
@@ -252,14 +197,9 @@ maxMedianBinDepth <- function(nBins, result)
 # Load annotation.
 
 processVcf <- function(csvPath, session) {
-  print(">>>>>>>processVcf<<<<<<<<<")
-  print(paste0("csvPath = ", csvPath))
-  print(paste0("plot_data$pathname = ", plot_data$pathname))
-  print("__________________________")
   
   if(is.null(csvPath))
   {
-    print("!!!!! csvPath is NULL in processVcf()!!!!")
     return(NULL)
   }
   
@@ -322,7 +262,6 @@ processVcf <- function(csvPath, session) {
     # This will vary depending on the GATK3/GATK4.   
     if(grepl("^#CHROM\\tPOS\\tID\\tREF\\tALT\\tQUAL\\tFILTER\\tINFO\\tFORMAT\\tNORMAL\\tTUMOR",line)) {
       # GATK3 found.
-      print("Assuming GATK3, setting normal slot 1 and tumour slot 2.")
       tumourSlotNum = 2
       normalSlotNum = 1
     }
@@ -338,30 +277,13 @@ processVcf <- function(csvPath, session) {
     
     
     if(grepl(paste0("^#CHROM\\tPOS\\tID\\tREF\\tALT\\tQUAL\\tFILTER\\tINFO\\tFORMAT\\t", normalSampleName, "\\t", tumourSampleName),line)) {
-      # Looks like GATK4, normal slot 1 and tumour slot 2.
-      print("Found normal slot 1 and tumour slot 2.")
-      
-      
-      print("NORMAL:")
-      print(normalSampleName)
-      
-      print("TUMOUR:")
-      print(tumourSampleName)
-      
-      
-      
-      
+      # Looks like GATK4, normal slot 1 and tumour slot 2. 
       normalSlotNum = 1
       tumourSlotNum = 2
     }
     
     if(grepl(paste0("^#CHROM\\tPOS\\tID\\tREF\\tALT\\tQUAL\\tFILTER\\tINFO\\tFORMAT\\t", tumourSampleName, "\\t", normalSampleName),line)) {
       # Looks like GATK4, normal slot 2 and tumour slot 1.
-      print("Found normal slot 2 and tumour slot 1.")
-      print("NORMAL:")
-      print(normalSampleName)
-      print("TUMOUR:")
-      print(tumourSampleName)
       
       normalSlotNum = 2
       tumourSlotNum = 1
@@ -379,7 +301,6 @@ processVcf <- function(csvPath, session) {
   # TODO!!!! Inform user with a warning here.
   if(tumourSlotNum == 0)
   {
-    print("Assuming GATK4, setting tumour slot 1 and normal slot 2.")
     tumourSlotNum = 1
     normalSlotNum = 2
   }
@@ -397,12 +318,27 @@ processVcf <- function(csvPath, session) {
   genome = paste0("BSgenome.Hsapiens.UCSC.hg", genome_str)
   txdb_str = paste0("TxDb.Hsapiens.UCSC.hg", genome_str,".knownGene")
   
-  print('>>>>>>>>>>>>>>>>>>>>')
-  print(genome_str)
-  print(genome)
-  print(txdb_str)
-  
-  print('>>>>>>>>>>>>>>>>>>>>')
+  # If user has loaded hg38, then closes and loads a hg37 there may be
+  # issues if hg38 is still loaded
+  # Advise user too run (.packages()) and see what hg38 stuff is loaded,
+  # Then unload them, ie.,
+  #
+  # detach("package:TxDb.Hsapiens.UCSC.hg38.knownGene", unload=TRUE)
+  # detach("package:BSgenome.Hsapiens.UCSC.hg38", unload=TRUE)
+  # 
+  # TODO!!!! Are you sure this was the issue?
+  # Perhaps it was just a memory issue / running out of RAM..
+  if(genome == "BSgenome.Hsapiens.UCSC.hg19")
+  {
+    packagesAlreadyLoaded = (.packages())
+    grepMatch = grepl("^BSgenome.Hsapiens.UCSC.hg3[8-9]$|^TxDb.Hsapiens.UCSC.hg3[8-9].knownGene$", packagesAlreadyLoaded)
+    if(any(grepMatch))
+    {
+      problemLibs=paste0("     ","detach(\"package:",packagesAlreadyLoaded[grepMatch],"\", unload = TRUE)\n",collapse = "")     
+      warningString=paste0("\nYou may need to unload the following libraries with\n\n",problemLibs,"\n before running this application with hg19 genome based UCSC annotation.\n")  
+      warning(warningString)      
+    }   
+  }
   
   
   # Next 8 lines are very convoluted, however thay are they best I can come up with at the moment.
@@ -418,17 +354,8 @@ processVcf <- function(csvPath, session) {
   cmd=paste0('library("',txdb_str,'")')  # Equivalent to "library(txdb_str)"
   source(textConnection(cmd))
   
-  
-  # TODO!!!! Replace next line with a grep syscall to find the reference the VCF was create with..
-  # Hold off on TODOs relating to this update..
-  # It might all be replaced by a 'mutect' style alternative...??
-  # (although some update will be necessary as MutationalPatterns requires at least the correct BSgenome.Hsapiens.UCSC.hg38 etc loaded...
-  # #> (.packages())
-  # [1] "TxDb.Hsapiens.UCSC.hg38.knownGene"
-  # and grep out to choose correct genome..
-  
   # We now parse the required reference from the vcf metadata (above).
-  # TODO!!!! remove parse from contig...
+  
   ref_genome <- base::get(genome)
   ref_organism <- GenomeInfoDb::organism(ref_genome)
   ref_style <- seqlevelsStyle(ref_genome)
@@ -438,11 +365,7 @@ processVcf <- function(csvPath, session) {
   
   vcf = readVcf(csvPath, genome_name)
   
-  # TODO!!!! comment and any related code below is now redundant and has bee removed.
-  # TODO!!!! remove remaining references..
-  # Are we setting up the sample names on a newly loaded VCF or are we just changing
-  # which sample we are accessing on a VCF that is already loaded?
-  # 
+  # TODO!!!! sampleNames here is now redundant, remove it and references..
   sampleNames = rownames(colData(vcf))
   
   
@@ -461,28 +384,12 @@ processVcf <- function(csvPath, session) {
   # already and move on.
   vcf <- renameSeqlevels(vcf, gsub("(^[XY]$)","chr\\1", gsub("(^[0-9]+$)","chr\\1", seqlevels(vcf))))
   #vcf <- renameSeqlevels(vcf, gsub("(^[0-9XY]+$)","chr\\1", seqlevels(vcf)))
-  #vcf <- renameSeqlevels(vcf, paste0("chr", seqlevels(vcf)))
-  
-  # BUG!!!! TODO!!!!
-  # If user has loaded hg38, then closed and loaded a hg37 there will be
-  # issues if hg38 is still loaded
-  
-  # Run (.packages()) and see what hg38 stuff is loaded,
-  # Then unload them, ie.,
-  #
-  # detach("package:TxDb.Hsapiens.UCSC.hg38.knownGene", unload=TRUE)
-  # detach("package:BSgenome.Hsapiens.UCSC.hg38", unload=TRUE)
-  
+  #vcf <- renameSeqlevels(vcf, paste0("chr", seqlevels(vcf)))  
   
   # Prune all the viral etc. contigs out of your VCF.
   # Just keep autosomal & XY. Then we will be able to annotate with TxDb etc..
   vcf <- keepSeqlevels(vcf, groups, pruning.mode = "tidy")
   
-  # Start off loading the first sample.
-  # Usually the tumour sample in a mutect VCF.
-  # Provide the user with an option to change to other samples in the VCF.
-  # TODO!!! What is param set to by default here?
-  # Do we somehow need to run ScanVcfParam() to limit what we load in here to sample names only?
   
   ################ 
   
@@ -490,12 +397,6 @@ processVcf <- function(csvPath, session) {
   # TODO!!!! update on success only...
   plot_data$vcfAnnotateObject <<- vcf 
   
-  print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-  print("head(info(vcf)$TLOD)")
-  print(head(info(vcf)$TLOD))
-  print("head(rowRanges(vcf)$FILTER)")
-  print(head(rowRanges(vcf)$FILTER))
-  print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
   
   # Where there are multi allelic variants at a given loci,
   # we need to filter out the one with that gives the max TLOD value.
@@ -508,13 +409,10 @@ processVcf <- function(csvPath, session) {
   tlod_l = info(vcf)$TLOD
   alt_l = rowRanges(vcf)$ALT
   # (Take the allelic fraction from the first sample,, ie., tumour)
-  # TODO!!!! make it plain in documentation that this tool expects the tumour sample to come first.
   af_l = geno(vcf[,tumourSlotNum])$AF
   af_norm_l = geno(vcf[,normalSlotNum])$AF
   
   
-  
-  print("Debug0.5>>>>>>>>>>>>>")
   
   # Format field differes between earlier versions (GATK3 & GATK4) of Mutect2.
   # This allows for that variation.
@@ -525,7 +423,6 @@ processVcf <- function(csvPath, session) {
   }
   else
   {
-    print(geno(vcf[,tumourSlotNum])$AD[3])   
     dp_l = lapply(geno(vcf[,tumourSlotNum])$AD, sum)
   }
   
@@ -535,11 +432,9 @@ processVcf <- function(csvPath, session) {
   }
   else
   {
-    print(geno(vcf[,normalSlotNum])$AD[3])   
     dp_norm_l = lapply(geno(vcf[,normalSlotNum])$AD, sum)
   }
   
-  print("Debug0.5>>>>>>>>>>>>>")
   
   # Number of records in original VCF.
   oidx_length = length(info(vcf)$TLOD)
@@ -553,16 +448,8 @@ processVcf <- function(csvPath, session) {
   alts_t = character(length(rowRanges(vcf)$ALT))
   
   maLogicV = (lengths(info(vcf)$TLOD) > 1)
-  print("Debug0.6>>>>>>>>>>>>>")
+  
   # Are there any multiallelic entries in this VCF?
-  
-  print(any(maLogicV))
-  print(length(maLogicV))
-  print(head(maLogicV))
-  
-  print("Debug0.6>>>>>>>>>>>>>")
-  
-  
   
   # Does this VCF contain Multiallelic entries?
   # If so, for each multiallelic record, pick the one with the highest TLOD to use.  
@@ -614,9 +501,7 @@ processVcf <- function(csvPath, session) {
   }
   
   
-  print("Debug0.7>>>>>>>>>>>>>")
   # print(head(data.frame(alts_t,tlod_t,af_t,af_norm_t)))
-  print("Debug0.7>>>>>>>>>>>>>")
   
   # Now pull out the reference alleles.
   # We know these are one element lists already so no need to do anything other than the next line.
@@ -658,7 +543,6 @@ processVcf <- function(csvPath, session) {
   
   end_time <- Sys.time()
   
-  print(paste0("Duration: ", end_time - start_time))
   
   # Put in chr number with length(seqnames(vcf)) etc...
   # Again the '[,1]' below subsets out the first sample (tumour sample).
@@ -668,28 +552,13 @@ processVcf <- function(csvPath, session) {
   vcfTable = data.frame(CHROM = as.character(seqnames(vcf[,tumourSlotNum])), POS = ranges(vcf[,tumourSlotNum]), FILTER = as.character(rowRanges(vcf)$FILTER), AF = af_t, AF_IN_NORM = af_norm_t, DP = as.numeric(dp_l), DP_IN_NORM = as.numeric(dp_norm_l), T_LOD = as.numeric(tlod_t), REF = refs_t, ALT = ma_t, MA = alts_t, TNC = tnctx_t, OIDX = seq(1:oidx_length), CLASS = tnctx_t)
   
   
-  print("Debug1>>>>>>>>>>>>>")
-  print(head(vcfTable))
-  
-  print(nrow(vcfTable))
-  
-  print(length(which(is.na(vcfTable$AF))))
-  print(length(which(is.na(vcfTable$DP))))
-  print(length(which(is.na(vcfTable$CHROM))))
-  
-  print("Debug1>>>>>>>>>>>>>")
-  
   ##################################################################################
   
   
-  print("DEBUG....")
   # How the hell did this get changed to a type integer?????????
   # TODO!!!! find out......
   # vcfTable$FILTER = as.character(vcfTable$FILTER)
-  print(typeof(vcfTable$FILTER))
   # print(head(rowRanges(vcf)$FILTER))
-  print(head(vcfTable$FILTER))
-  print("...............................")
   
   # TODO!!!!
   # Why do we need to do this again here????
@@ -723,8 +592,6 @@ processVcf <- function(csvPath, session) {
   # TODO!!!! remove...
   # Load locally while internet down..
   v3signatures = read.csv("/home/sully/BIO_INFORMATICS/VCF_PARSE/Cancer_Informatics/COSMIC_v3/sigProfiler_exome_SBS_signatures.csv")
-  
-  
   
   
   if (nrow(v3signatures) != 96) 
@@ -778,9 +645,7 @@ processVcf <- function(csvPath, session) {
   # Annotation stuff....
   
   # We parse this now from the vcf metadata and so can replace this line..
-  # TODO!!!! remove parse from contig...
   # txdb <- TxDb.Hsapiens.UCSC.hg38.knownGene
-  #source(textConnection('this_is_a_test=123'))
   
   # Next 2 lines are very convoluted, however thay are they best I can come up with at the moment.
   cmd=paste0("txdb <- ",txdb_str)
@@ -801,8 +666,6 @@ processVcf <- function(csvPath, session) {
   # In that case set the name to 'UNKNOWN'
   if(sum(is.na(geneNames)) > 0)
   {
-    print("NAs in gene names!!!!")
-    print(sum(is.na(geneNames)))
     
   }
   
@@ -957,9 +820,6 @@ getSnvMutationalMatrix <- function(result, lower_frange = NULL, upper_frange = N
   rownames(new_mat) <- names(tmp)
   colnames(new_mat) <- "Tumour Sample"
   
-  print(">>>>>>>>>>>>>getSnvMutationalMatrix<<<<<<<<<<<<<<<<<<<<")
-  print(new_mat)
-  print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
   
   # Return the mutation matrix.
   # It will be used to plot the 96 context barplot
@@ -974,10 +834,6 @@ getSnvMutationalMatrix <- function(result, lower_frange = NULL, upper_frange = N
 nevolution <- function(result, lower_frange = 0.45, upper_frange = 0.55)
 {
   
-  print(">>>>>>>>>>>>>>neutrality test... lower_frange,upper_frange<<<<<<<<<<<<<<<<")
-  print(lower_frange)
-  print(upper_frange)
-  print("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<")
   
   # Subset out all the SNVs within required allele freq. range.
   snvIdx = which(result$AF > lower_frange &
@@ -987,16 +843,11 @@ nevolution <- function(result, lower_frange = 0.45, upper_frange = 0.55)
   
   n <- neutralitytest(result$AF[snvIdx], fmin = lower_frange, fmax = upper_frange)
   
-  #n <- neutralitytest(result$AF[snvIdx], read_depth = 100.0, cellularity = 0.8, rho = 0.0, ploidy = 2)
-  
-  print(summary(n))
-  
   return(lsq_plot(n))
-  
 }
 
 # Lollypop peptide plot..
-# 
+# We also need to pass the session id to this as it updates the gene list (under 'select gene').
 lpoppep <- function(session, result, lower_frange = 0.45, upper_frange = 0.55, geneName)
 {
   
@@ -1005,14 +856,6 @@ lpoppep <- function(session, result, lower_frange = 0.45, upper_frange = 0.55, g
   {
     return()
   }
-  
-  # TODO!!!!
-  # Also consider updating select gene list after plot has been subsetted to only show what is being displayed in AF range?
-  # Add option along with "passed / failed one or more filters" to allow "Exclusively failed any selected filters" and "Exclusively failed all selected filters" or "Failed only selected filters."
-  
-  print("geneName 1")
-  print(geneName)
-  
   
   # Get a consistent legend colour map going here.
   #
@@ -1034,9 +877,6 @@ lpoppep <- function(session, result, lower_frange = 0.45, upper_frange = 0.55, g
   colScale <- scale_colour_manual(name = "CONSEQUENCE",values = cseqColours)
   
   
-  print(">>>>>>>>>>>>>>lower_frange,upper_frange<<<<<<<<<<<<<<<<")
-  print(lower_frange)
-  print(upper_frange)
   
   # Subset out all the SNVs within required allele freq. range.
   snvIdx = which(result$AF > lower_frange &
@@ -1048,9 +888,6 @@ lpoppep <- function(session, result, lower_frange = 0.45, upper_frange = 0.55, g
   
   # This is the subset we're interested in.
   annaSubset = geneAnnotateDf[annSubsetIdx,]
-  
-  
-  #">>>>>>>>>>>>>>lower_frange,upper_frange<<<<<<<<<<<<<<<<"
   
   # Check if the user has just selected a new range having failed to find a protein impacted gene in last range.
   if(geneName=="None Found")
@@ -1064,14 +901,9 @@ lpoppep <- function(session, result, lower_frange = 0.45, upper_frange = 0.55, g
   gChoices = as.character(unique(annaSubset$GENE_SYMBOL))
   
   # if gChoices != NA or has length zero..
-  print(">>>>>>updateGeneSelectionList called from 1?<<<<")
-  print(gChoices)
-  print(geneName)
-  print(">>>>>>updateGeneSelectionList called from 1?<<<<")
   
   if(!is.na(gChoices) && (length(gChoices) > 0))
   {
-    print("updateGeneSelectionList called from 1a")
     
     # Leave the current gene of interest selected if possible,
     # Pick first one if not.
@@ -1089,22 +921,8 @@ lpoppep <- function(session, result, lower_frange = 0.45, upper_frange = 0.55, g
   }
   else
   {
-    print("updateGeneSelectionList called from 1b")
     updateGeneSelectionList(session, NA, NA)
-    print("geneName 2")
-    print(geneName)
   }
-  
-  print(">>>>>>>>>>>>>>annaSubset<<<<<<<<<<<<<<<<")
-  print(length(annSubsetIdx))
-  print(sum(annSubsetIdx))
-  print(head(annSubsetIdx))
-  print(nrow(annaSubset))
-  #  print(grepl("SPANXB1", annaSubset$GENE_SYMBOL))
-  
-  print(summary(annaSubset$GENE_SYMBOL))
-  
-  print("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<") 
   
   
   hitList = annaSubset[grepl(paste("^",geneName,"$", sep = ""), annaSubset$GENE_SYMBOL),]
@@ -1128,8 +946,6 @@ lpoppep <- function(session, result, lower_frange = 0.45, upper_frange = 0.55, g
       geom_segment( aes(x=0, xend=0, y=0, yend=-0.03*0.3)) +
       geom_segment( aes(x=100, xend=100, y=0, yend=-0.03*0.3)) 
     
-    print("geneName 3")
-    print(geneName)
     if(!is.na(geneName) && geneName != "None Found")
     {
       geneString = paste0(" for ",geneName)
@@ -1155,10 +971,6 @@ lpoppep <- function(session, result, lower_frange = 0.45, upper_frange = 0.55, g
     #    return(NULL)
   }  
   
-  print(">>>>>>>>>>>>>>hitList<<<<<<<<<<<<<<<<")
-  print(nrow(hitList))
-  print(head(hitList))
-  print("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<")  
   
   # Get the canonical (longest) sequence here and run with that for the plot..
   # Will usually be first in list but take no chances..
@@ -1221,9 +1033,6 @@ lpoppep <- function(session, result, lower_frange = 0.45, upper_frange = 0.55, g
   
   # Also, (TODO!!!!) filter out the synonymous variants, doesn't make much sence to display them on a peptide plot(?maybe?)
   
-  print(">>>>>>>>>>>>>>HIT<<<<<<<<<<<<<<<<")
-  print(hit)
-  print("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<")
   
   tLabel = paste0(hit$REFAA,hit$PROTEIN_MOD_START,hit$VARAA, sep="")
   tLabel[hit$CONSEQUENCE == "frameshift"] = paste0(hit[hit$CONSEQUENCE == "frameshift","PROTEIN_MOD_START"], "_f.shift:",hit[hit$CONSEQUENCE == "frameshift","VARIANT.width"])
@@ -1328,9 +1137,6 @@ cosmicComboBreakdown <- function(result, lower_frange = 0.45, upper_frange = 0.5
   # Get the mutational matrix for the SNVs within this allele frequence range.
   new_mat = getSnvMutationalMatrix(result, lower_frange, upper_frange)
   
-  print(">>>>>URHERE>>>>>>>>>>>>>>>>>>>")
-  print(new_mat)
-  print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
   
   # Sum new_max to see how many SNVs we got.
   total_snvs = sum(new_mat)
@@ -1351,14 +1157,6 @@ cosmicComboBreakdown <- function(result, lower_frange = 0.45, upper_frange = 0.5
   # (using nonnegative linear least-squares fit method from pracma library)
   nonNegLsqFit = lsqnonneg(plot_data$vcfFile$cosmicSignatures, new_mat[,1])
   
-  #print(">>>>>URHERE>>>>>>>>>>>>>>>>>>>")
-  #print(new_mat)
-  #print("------------------------")
-  #print(nonNegLsqFit$x)
-  #print("------------------------")
-  #print(fit_res)
-  #print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-  
   # Fix the order they will appear on the barplot.
   # (in ascending etc.. you need to do this or ggplot will re-order alphabetically)
   # df <- data.frame(signatures=as.numeric(gsub("Signature.", "", colnames(plot_data$vcfFile$cosmicSignatures))),
@@ -1371,13 +1169,17 @@ cosmicComboBreakdown <- function(result, lower_frange = 0.45, upper_frange = 0.5
   df$signatures <- factor(df$signatures, levels = df$signatures)
   
   # Plot it.
-  ggplot(data=df, aes(x=signatures, y=contribution)) +
+  p = ggplot(data=df, aes(x=signatures, y=contribution)) +
     geom_bar(stat="identity", color="blue", fill="white") +
     ggtitle(paste0("Signature Contribution\n[", signif(lower_frange,6), "," , signif(upper_frange,6), "), ", total_snvs, " SNVs. Norm of residuals = ", round(nonNegLsqFit$resid.norm,digits=6), ".")) +
     labs(y= "contribution (SNVs)", x = "v3 cosmic signature") + 
     theme(axis.text.x=element_blank(),
           axis.ticks.x=element_blank()) +
     geom_text(aes(label=signatures), vjust=-.5, color="blue", size=rel(2.5))
+  
+  # Record this plot in TopOneGgplot incase the user wants to save it as svg.
+  TopOneGgplot <<- p
+  return(p)
 }
 
 frange <- function(result, lower_frange = 0.45, upper_frange = 0.55)
@@ -1424,25 +1226,27 @@ frange <- function(result, lower_frange = 0.45, upper_frange = 0.55)
   rownames(new_mat) = NULL
   df2 = cbind(df, as.data.frame(new_mat))
   df3 = melt(df2, id.vars = c("substitution", "context"))
-  
-  # print(head(df3))
   value = NULL
   
   # Plot it.
-  return(ggplot(data = df3, aes(x = context, y = value, 
-                                fill = substitution, width = 1)) + geom_bar(stat = "identity", 
-                                                                            colour = "black", size = 0.2) +
-           ggtitle(paste0("[", signif(lower_frange,6), "," , signif(upper_frange,6), "), ", total_snvs, " SNVs.")) +
-           scale_fill_manual(values = colors) + 
-           facet_grid(. ~ substitution) + ylab("Relative contribution") +
-           coord_cartesian(ylim = c(0, ymax)) + scale_y_continuous(breaks = seq(0, 
-                                                                                ymax, 0.1)) + guides(fill = FALSE) + theme_bw() + 
-           theme(axis.title.y = element_text(size = 12, vjust = 1), 
-                 axis.text.y = element_text(size = 8), axis.title.x = element_text(size = 12), 
-                 axis.text.x = element_text(size = 5, angle = 90, 
-                                            vjust = 0.4), strip.text.x = element_text(size = 9), 
-                 strip.text.y = element_text(size = 9), panel.grid.major.x = element_blank(), 
-                 panel.spacing.x = unit(0, "lines")))
+  p = ggplot(data = df3, aes(x = context, y = value, 
+                             fill = substitution, width = 1)) + geom_bar(stat = "identity", 
+                                                                         colour = "black", size = 0.2) +
+    ggtitle(paste0("[", signif(lower_frange,6), "," , signif(upper_frange,6), "), ", total_snvs, " SNVs.")) +
+    scale_fill_manual(values = colors) + 
+    facet_grid(. ~ substitution) + ylab("Relative contribution") +
+    coord_cartesian(ylim = c(0, ymax)) + scale_y_continuous(breaks = seq(0, 
+                                                                         ymax, 0.1)) + guides(fill = FALSE) + theme_bw() + 
+    theme(axis.title.y = element_text(size = 12, vjust = 1), 
+          axis.text.y = element_text(size = 8), axis.title.x = element_text(size = 12), 
+          axis.text.x = element_text(size = 5, angle = 90, 
+                                     vjust = 0.4), strip.text.x = element_text(size = 9), 
+          strip.text.y = element_text(size = 9), panel.grid.major.x = element_blank(), 
+          panel.spacing.x = unit(0, "lines"))
+  
+  # Record this plot in TopOneGgplot incase the user wants to save it as svg.
+  TopOneGgplot <<- p
+  return(p)
   
   
 }
@@ -1485,7 +1289,7 @@ ui <- shinyUI(
                     HTML(paste0('<div id="tlodThresh_slider" class="InvisableAtStart" style="display:inline-block; padding-right: 50px; margin-top: 4px;">')),
                     numericInput("afInNormal", "AF ceiling:", value = 0, min = 0, max = 1, step = 0.005, width = "65px"),
                     HTML(paste0('</div>')),
-HTML(paste0('<div id="depthThresh_slider" class="InvisableAtStart" style="display:inline-block;">')),
+                    HTML(paste0('<div id="depthThresh_slider" class="InvisableAtStart" style="display:inline-block;">')),
                     numericInput("depthThreshInNormal", "Depth:", value = 0, min = 0, max = 1000, width = "80px"),
                     HTML(paste0('</div>')),
                     
@@ -1503,10 +1307,13 @@ HTML(paste0('<div id="depthThresh_slider" class="InvisableAtStart" style="displa
                     # The "TopOne" plot is a plot with a transparent background.
                     # It is positioned on top of the VAF plot and displays content when the user
                     # selects an allele frequency 'window' range with select and drag from the VAF plot.
-                    HTML(paste0('<div id="TopOne" class="shiny-plot-output" style="width: 70% ; height: 7%"></div>')),
+                    # We don't need to set width here, it's set by args to output$TopOne <- renderPlot(...)
+                    plotOutput("TopOne", dblclick = "topOnePlotDblclick", width = "100%", height = "7%"),
                     
                     # VAF plot.
-                    plotOutput("targetVcf", click = "plot_click", brush = "plot_brush", dblclick = "plot_dblclick"),
+                    # We don't use a double click event here nay more so remove..
+                    #plotOutput("targetVcf", click = "targetVcfPlotDblclick", brush = "targetVcfPlotBrush", dblclick = "targetVcfPlotDblclick"),
+                    plotOutput("targetVcf", dblclick = "targetVcfPlotDblclick", brush = "targetVcfPlotBrush"),
                     
                     
                     # A pre text area where the depth at a given VAF (specified by a user mouse click) is displayed.
@@ -1578,17 +1385,32 @@ server <- shinyServer(function(input, output, session) {
   
   # Observe a brush stroke event.
   # Update the max and min freq. numeric input values accordingly.
-  observeEvent(input$plot_brush, {    
-    updateNumericInput(session, "minF", value = round(input$plot_brush$xmin,digits=2))
-    updateNumericInput(session, "maxF", value = round(input$plot_brush$xmax,digits=2))   
+  observeEvent(input$targetVcfPlotBrush, {    
+    updateNumericInput(session, "minF", value = round(input$targetVcfPlotBrush$xmin,digits=2))
+    updateNumericInput(session, "maxF", value = round(input$targetVcfPlotBrush$xmax,digits=2))   
   })
   
-  observe({
-    # When another gene is selected from the geneList,
-    # automatically select peptide sequence for the
-    # Inset window function radiobutton.
-    input$geneList
-    updateRadioButtons(session, "afWindow",selected = "PepS")
+  observeEvent(input$topOnePlotDblclick$x, {
+    # Check first to make sure TopOne window is active and signatures secondary analysis set.  
+    # Return NULL otherwise.
+    if(!(input$minF<input$maxF) || (input$afWindow != "SigC"))
+    {
+      return(NULL)
+    }
+    
+    # TODO!!!!
+    # We should really get the start of these bars on the plot from the ggplot object..
+    # We could access this here fro the global, TopOneGgplot.
+    # This approximation should do for now however..
+    totalLength = 65
+    sigNames = colnames(plot_data$vcfFile$cosmicSignatures)
+    totalNumCosmicV3sigs = length(sigNames)  
+    barLength = totalLength/totalNumCosmicV3sigs
+    v3barNum = round(input$topOnePlotDblclick$x/barLength)
+    httpLink = paste0("https://cancer.sanger.ac.uk/cosmic/signatures/SBS/", sigNames[v3barNum], ".tt")
+    
+    # Open the link to this signature description at Sanger.
+    browseURL(httpLink) 
   })
   
   observeEvent(input$saveAsSvg, {
@@ -1603,7 +1425,6 @@ server <- shinyServer(function(input, output, session) {
     
     if(!is.null(TopOneGgplot))
     {
-      print(">>>>Saving TopOneGgplot...")
       
       showModal(modalDialog(
         title = "Saving inset as PNG.",
@@ -1629,12 +1450,12 @@ server <- shinyServer(function(input, output, session) {
       # So for our image,
       # height = 12.5, width = 25
       # note... can't get ggsave to work properly, giving up..
+      # This section of comments now redundant..
       
       
     }
     else if(!is.null(targetVcfGgplot))
     {
-      print(">>>>Saving targetVcfGgplot...")
       showModal(modalDialog(
         title = "Saving main window as PNG.",
         paste0("The main window has been saved as '", outputFile,"'."),
@@ -1655,7 +1476,6 @@ server <- shinyServer(function(input, output, session) {
     }
     else
     {
-      print(">>>>No ggplots, ignoring...")
       showModal(modalDialog(
         title = "No plot available to save.",
         paste0("Please select a VCF and create a plot before saving it."),
@@ -1679,9 +1499,6 @@ server <- shinyServer(function(input, output, session) {
     
     if(is.null(result))
       return(NULL)
-    print(">>>>>>>>>>>>>>>>>>>>>")
-    print(gsub("^", "vcfView_", plot_data$vcfFile$pathname))
-    print(">>>>>>>>>>>>>>>>>>>>>")
     
     timeStamp = format(Sys.time(), '%b_%d_%Y_%Hh%Mm%Ss')
     
@@ -1692,18 +1509,12 @@ server <- shinyServer(function(input, output, session) {
     
     afFilterString = ""
     
-    if(!is.null(input$plot_brush) && !is.null(plot_data) && !is.null(plot_data$snvIdx))
+    if(!is.null(input$targetVcfPlotBrush) && !is.null(plot_data) && !is.null(plot_data$snvIdx))
     {
-      print(">>>>>URHERE>>>>>>")
-      print(head(result$OIDX[plot_data$snvIdx]))
-      print(">>length>>")
-      print(length(plot_data$snvIdx))
-      print(length(result$OIDX[plot_data$snvIdx]))
-      print(result$OIDX[plot_data$snvIdx])
       
       writeVcf(plot_data$vcfAnnotateObject[result$OIDX[plot_data$snvIdx]], outputFile)
       
-      afFilterString= paste0("# Candidates variants were subsetted between allele frequency range, [", input$plot_brush$xmin, ", ",  input$plot_brush$xmax, ")")
+      afFilterString= paste0("# Candidates variants were subsetted between allele frequency range, [", input$targetVcfPlotBrush$xmin, ", ",  input$targetVcfPlotBrush$xmax, ")")
     }
     
     else
@@ -1724,7 +1535,7 @@ server <- shinyServer(function(input, output, session) {
              paste0("# Tumour depth at variant locus = ", as.character(input$depthThresh)),
              paste0("# Normal depth at variant locus = ", as.character(input$depthThreshInNormal)),
              afFilterString)
-        
+    
     
     # Append the comments recording the modifications made to the VCF.
     write(line,file=outputFile,append=TRUE)
@@ -1740,9 +1551,6 @@ server <- shinyServer(function(input, output, session) {
   
   targetvcf <- eventReactive(input$evReactiveButton, {
     
-    print(paste0("input$evReactiveButton>>>>>>>>>> >",input$evReactiveButton,"<"))
-    
-    
     if(input$evReactiveButton<1)
       return(NULL)
     
@@ -1753,8 +1561,6 @@ server <- shinyServer(function(input, output, session) {
       return(NULL)
     
     vcfFile = processVcf(csvPath, session)
-    
-    # URHERE  put the line above in the plot fn and return the csvPath instead....
     
     return(vcfFile);
     
@@ -1780,8 +1586,7 @@ server <- shinyServer(function(input, output, session) {
       input$afInNormal
       1
     },
-    {
-      
+    {      
       vcfFile = targetvcf()
       
       # Now we have out VCF grep out any filters we are not interested in.
@@ -1793,50 +1598,10 @@ server <- shinyServer(function(input, output, session) {
       # vcfFile$filters = ""
       result=vcfFile$data
       
-      # Ignore variants that have a zero allele frequency in the tumour
-      # (ie. are only present in normal).
-      
-      # URHERE>>
-      
-      print("DebugBefore>>>>>>>>>>>>>")
-      print(head(result))
-      
-      print(nrow(result))
-      
-      print(length(which(is.na(result$AF))))
-      print(length(which(is.na(result$DP))))
-      print(length(which(is.na(result$CHROM))))
-      
-      print("DebugBefore>>>>>>>>>>>>>")
-      
-      print("Debug1.7>>>>>>>>>>>>>")
-      print(length(which(result$AF == 0)))
-      
-      
-      print(nrow(result))
-      
-      print("Debug1.7>>>>>>>>>>>>>")
-      
-      
-      print("DebugAfter3>>>>>>>>>>>>>")
-      print(head(result))
-      
-      print(nrow(result))
-      
-      print(length(which(is.na(result$AF))))
-      print(length(which(is.na(result$DP))))
-      print(length(which(is.na(result$CHROM))))
-      
-      print("DebugAfter3>>>>>>>>>>>>>")     
-      
-      
-      
-      
       if(length(input$showPassedVariants) == 0)
       {
         return(NULL)
-      }
-      
+      }     
       
       # TODO URHERE!!!!
       # Change this to "display passed/failed variants"
@@ -1846,16 +1611,10 @@ server <- shinyServer(function(input, output, session) {
       #      # Filter them out if we've been asked not to display PASS variants.
       #      if(!input$includePassedVariants)
       #      {
-      #        print("EXCLUDING PASS Variants.")
       #        result = result[result$FILTER != "PASS",]
       #      }
       #    }
       
-      #######################################################################
-      
-      
-      
-      ######################################################################
       
       secondPassLogicalVector = rep(FALSE,nrow(result))
       
@@ -1865,14 +1624,7 @@ server <- shinyServer(function(input, output, session) {
         # Only include variants that PASSed (did not fail any filters).
         # If PASS variants have already been filtered out by the previous filter so be it.
         # We will end up with an empty result in that case.
-        
         secondPassLogicalVector = (result$FILTER != "PASS")
-        
-        
-        print(">>>>filterResult AAAAAAAAAA>>>>>>>>>")
-        print(sum(secondPassLogicalVector, na.rm = TRUE))
-        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-        
         
       }
       
@@ -1883,13 +1635,6 @@ server <- shinyServer(function(input, output, session) {
         # (ie., exclude secondPassLogicalVector to exclude variants annotated as PASS in vcf.)
         
         secondPassLogicalVector = (result$FILTER == "PASS")
-        
-        
-        print(">>>>filterResult ABABABABABABAB>>>>>>>>>")
-        print(sum(secondPassLogicalVector, na.rm = TRUE))
-        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-        
-        
       }
       
       # Have we been asked to display variants that failed any/all filters
@@ -1900,27 +1645,13 @@ server <- shinyServer(function(input, output, session) {
         # Only include variants that failed.
         # (ie., exclude secondPassLogicalVector to exclude variants annotated as PASS in vcf.)
         secondPassLogicalVector = rep(TRUE,nrow(vcfFile$data))
-        
-        
-        print(">>>>filterResult BBBBBBBBBB>>>>>>>>>")
-        print(sum(secondPassLogicalVector, na.rm = TRUE))
-        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-        
-        
       }
-      
-      
-      
-      
       
       # Have we been requested to filter out some candidate variants that have failed selected filters?
       # Skip this filtering step if user has cleared all filters (either individually, or by selecting "CLEAR_ALL".
       # Also skip it if the user has selected SET_ALL as we dealt with this above in the
       # if(...input$activeFilters == "SET_ALL") statement.
       if(!is.null(input$activeFilters) && input$activeFilters != "CLEAR_ALL" && input$activeFilters != "SET_ALL") {
-        
-        
-        
         # Have we been asked to show the variants that only failed selected filters?
         if(input$showPassedVariants == "FailFOnly")
         {
@@ -1930,11 +1661,6 @@ server <- shinyServer(function(input, output, session) {
           
           # Exclude entry unless it has failed all of the selected filteres.
           secondPassLogicalVector = !(lapply(firstPass,all) == TRUE)
-          print("FailFOnly: We are here!!!!!!!!!!!!!!!!!!!!!!!!")
-          print("grepString:....")
-          print(grepString)
-          print(secondPassLogicalVector)
-          print(result[!secondPassLogicalVector,]$FILTER)
         }
         else
         {
@@ -1944,13 +1670,7 @@ server <- shinyServer(function(input, output, session) {
           
           # If the entry has failed any of the selected filteres, exclude it.
           secondPassLogicalVector = (lapply(firstPass,any) == TRUE)
-          
         }
-        
-        print(">>>>filterResult 222222222>>>>>>>>>")
-        print(sum(secondPassLogicalVector, na.rm = TRUE))
-        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-        
       }
       
       # Have we been asked to show the variants that passed or failed the filters?
@@ -1962,136 +1682,56 @@ server <- shinyServer(function(input, output, session) {
       # Start your depth and tlod filtering.
       
       if(!is.null(input$tlodThresh)) {
-        print(">>>>input$tlodThresh>>>>")
-        print(input$tlodThresh)
-        print(">>>>>>>>>>>>>>>>>>>>>>>>")
-        
-        
         # Record anything that has failed either filter list or the T_LOD threshold.
-        secondPassLogicalVector = secondPassLogicalVector | (result$T_LOD <= input$tlodThresh)
-        
+        secondPassLogicalVector = secondPassLogicalVector | (result$T_LOD <= input$tlodThresh)     
       }    
       
       if(!is.null(input$depthThresh)) {
-        print(">>>>input$depthThresh>>>>")
-        print(input$depthThresh)
-        print(">>>>>>>>>>>>>>>>>>>>>>>>")
-        
         # Record anything that has failed either filter list or tumour depth threshold.        
         secondPassLogicalVector = secondPassLogicalVector | (result$DP <= input$depthThresh)
-        
-        print(">>>>filterResult 444444444>>>>>>>>>")
-        print(sum(secondPassLogicalVector, na.rm = TRUE))
-        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")        
       }
-
+      
       if(!is.null(input$depthThreshInNormal)) {
-        print(">>>>input$depthThresh>>>>")
-        print(input$depthThresh)
-        print(">>>>>>>>>>>>>>>>>>>>>>>>")
-        
         # Record anything that has failed either filter list or normal depth threshold.        
         secondPassLogicalVector = secondPassLogicalVector | (result$DP_IN_NORM <= input$depthThreshInNormal)
-        
-        print(">>>>filterResult 4.1...>>>>>>>>>")
-        print(sum(secondPassLogicalVector, na.rm = TRUE))
-        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")        
       }
-      
-      
-      
-      ###########################################################################
       
       # If there is an AF ceiling set in the normal sample
       # then subset accordingly.
       if(!is.null(input$afInNormal) & input$afInNormal > 0) {
-        print(">>>>input$afInNormal>>>>")
-        print(input$afInNormal)
-        print(">>>>>>>>>>>>>>>>>>>>>>>>")
-        
         # Record anything that has failed either filter list or the depth threshold.        
         secondPassLogicalVector = secondPassLogicalVector | (result$AF_IN_NORM >= input$afInNormal)
-        
-        print(">>>>filterResult 4.54.54.54.54.5>>>>>>>>>")
-        print(sum(secondPassLogicalVector, na.rm = TRUE))
-        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")        
       }
-      
-      
-      
-      ########################################################################
-      
-      
-      print("DebugAfter2>>>>>>>>>>>>>")
-      print(head(result))
-      
-      print(nrow(result))
-      
-      print(length(which(is.na(result$AF))))
-      print(length(which(is.na(result$DP))))
-      print(length(which(is.na(result$CHROM))))
-      
-      print("DebugAfter2>>>>>>>>>>>>>")     
-      
-      
       
       
       # Is anything is left after all filtered variants removed?
-      
-      print("!!!!!!YOU GOT HEREEEEEEEE!!!!!!!!!!!!")
-      print(any(secondPassLogicalVector))                           
-      print(sum(secondPassLogicalVector))
-      print(length(secondPassLogicalVector))
-      print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-      print(any(result$T_LOD <= input$tlodThresh))
-      print(sum(result$T_LOD <= input$tlodThresh))
-      print(length(result$T_LOD))
-      print("!!!!!!YOU GOT HEREEEEEEEE!!!!!!!!!!!!")
-      
-      
-      print("DebugAfterHEEERRRRR>>>>>>>>>>>>>")
-      print(head(result))
-      print(nrow(result))
-      
       result = result[!secondPassLogicalVector,]
       
-      print(head(result))
-      print(nrow(result))
-      print("DebugAfterHEEERRRRR>>>>>>>>>>>>>")
       
       # If nothing is returned with this filter combination, ignore & return null.
       if(!nrow(result)) {
-        print("No matches to filters found, ignoring...")
-        
-        print("No plot!!!!!!!!!!!!")
-        print(input$activeFilters)
-        print(result$FILTER)
-        print("!!!!!!!!!!!!!!!!!!!")   
-        
         return(NULL)
-        
       }
-      
-      print("DebugAfter1>>>>>>>>>>>>>")
-      print(head(result))
-      
-      print(nrow(result))
-      
-      print(length(which(is.na(result$AF))))
-      print(length(which(is.na(result$DP))))
-      print(length(which(is.na(result$CHROM))))
-      
-      print("DebugAfter1>>>>>>>>>>>>>")
       
       return(result)
     }) 
   
-  output$TopOne <- renderPlot({ 
+  output$TopOne <- renderPlot({
+    
     vcfFile = targetvcf()
-    print(">>>>>>>>>>>>>>>>>>>>>>>>>")
-    print("input$plot_click$x")
-    print(input$plot_click$x)
-    print(">>>>>>>>>>>>>>>>>>>>>>>>>")
+    
+    # Whats left post filtering of vcf.
+    result = filterResult()
+    
+    # The following events trigger this function.. 
+    input$minF
+    input$maxF
+    
+    
+    if(is.na(input$minF) || is.na(input$maxF))
+    {
+      return(NULL)
+    }
     
     xMin = input$minF
     xMax = input$maxF
@@ -2102,36 +1742,20 @@ server <- shinyServer(function(input, output, session) {
       return(NULL)
     }
     
-    # Whats left post filtering of vcf.
-    result = filterResult()     
-    
-    if(is.null(vcfFile)) 
-      return(NULL)    
-    
-    # Has the radio button that specifies the inset window type or it AF freq. range changed.
-    if(input$afWindow != previousAfWindowType ||
-       input$minF != previousMinF ||
-       input$maxF != previousMaxF)
+    if(is.null(vcfFile))
     {
-      # Update previous log and move on with processing.
-      previousAfWindowType <<- input$afWindow
-      previousMinF <<- input$minF
-      previousMaxF <<- input$maxF
-    }
-    # Otherwise, if a user clicks the plot, unless a brush range is under selection, clear the TopOne plot.
-    else if(is.numeric(input$plot_click$x)){
-      print("Checking here!!!!!!!!!!!!!")
-      if(!(is.numeric(input$plot_brush$xmin) && is.numeric(input$plot_brush$xmin)))
-      {
-        return(NULL)
-      }
-    }
+      return(NULL) 
+    }  
+    
+    # Update previous log and move on with processing.
+    previousMinF <<- input$minF
+    previousMaxF <<- input$maxF 
+    
     
     # Now with the max and min frequency ranges are specified, handle the event as
     # specified by the afWindow input.
     if(input$afWindow == "SigC")
     {
-      print("# Plot Cosmic signatures contributions.")
       # Plot Cosmic signatures contributions.
       return(cosmicComboBreakdown(result,xMin,xMax))
     }
@@ -2160,24 +1784,6 @@ server <- shinyServer(function(input, output, session) {
         ))
         return(NULL)
       } 
-      
-      print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-      print(input$geneList)
-      print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-      
-      ################################
-      #prnt=lpoppep(result, xMin,xMax, input$geneList)
-      #tiff("test.png", units="in", width=8, height=5, res=300)
-      #prnt
-      #dev.off()
-      #return(prnt)
-      
-      ################################
-      #png(outfile, width = 400, height = 300)
-      #    hist(rnorm(input$obs), main = "Generated in renderImage()")
-      #    dev.off()
-      # updateGeneSelectionList <- function(session, gChoices, currentGeneSelected)      
-      
       return(lpoppep(session, result, xMin,xMax, input$geneList))
     }   
     else
@@ -2207,8 +1813,12 @@ server <- shinyServer(function(input, output, session) {
     if(length(filterAggregationUl) > 0)
     {
       filterAggregationDf = data.frame(filter_types=filterAggregationUl)
-      return( ggplot(filterAggregationDf, aes(x = filter_types, stat(count)/numFailedCandidateVariants)) + geom_bar() + scale_y_continuous(limits = c(0,1)) + ggtitle(paste0("[", signif(xMin,6), "," , signif(xMax,6), "), ", numCandidateVariants, " candidates, ", signif(percentOfPassedCandidates,6), "% PASS")) +
-                labs(y="Failed fraction", x = "Filter types") +  theme(axis.text.x=element_text(family="serif", angle=45,hjust=1,vjust=0.95, colour="black", size = 12)) ) 
+      p = ggplot(filterAggregationDf, aes(x = filter_types, stat(count)/numFailedCandidateVariants)) + geom_bar() + scale_y_continuous(limits = c(0,1)) + ggtitle(paste0("[", signif(xMin,6), "," , signif(xMax,6), "), ", numCandidateVariants, " candidates, ", signif(percentOfPassedCandidates,6), "% PASS")) +
+                labs(y="Failed fraction", x = "Filter types") +  theme(axis.text.x=element_text(family="serif", angle=45,hjust=1,vjust=0.95, colour="black", size = 12))
+  # Record this plot in TopOneGgplot incase the user wants to save it as svg.
+  TopOneGgplot <<- p
+  return(p)
+
     }
     
     else
@@ -2223,15 +1833,11 @@ server <- shinyServer(function(input, output, session) {
     # Whats left post filtering of vcf.
     result = filterResult()
     
-    print("Debug1.6>>>>>>>>>>>>>")
-    print(head(result))
-    print("Debug1.6>>>>>>>>>>>>>")
     
     # Check to see if any data was returned in 'result'.
     # If not inform the user by constructing a null plot.
     if(is.null(result))
     {
-      print(">>>>>>>>>>>>>NULL result output$targetVcf <- renderPlot()<<<<<<<<<<")
       nullPlot = data.frame(density=c(0), AF=c(0))
       p=ggplot(data=nullPlot, aes(x=AF, y=density)) +
         ggtitle(vcfFile$pathname) +
@@ -2259,23 +1865,12 @@ server <- shinyServer(function(input, output, session) {
     # TODO!!!! make this user configurable by adding something to the UI.
     num_of_bins = 500;
     
-    print("try it here...")
-    
-    print(nrow(result[3,]))
-    print(result[3,])
-    
     # Create a interpolation pallet to reflect this.
     colours = maxMedianBinDepth(num_of_bins, result)
-    
-    print(length(colours))
-    print(head(colours))
-    
     
     # Now we've got a plot update gene list annotation.
     # Make sure the gene list provided to the user reflects
     # only genes that are displayed in the plot so as not to clutter.
-    
-    #############################################################################
     
     # See if the max, min freq limits are set.
     # If they are only show genes within these limits.
@@ -2305,9 +1900,7 @@ server <- shinyServer(function(input, output, session) {
       # pull out the annotation for this result subset using the oidx
       # without any freq range. 
       annSubsetIdx = !is.na(match(geneAnnotateDf$QUERYID, result$OIDX))
-      
     }
-    
     
     # This is the subset we're interested in.
     annaSubset = geneAnnotateDf[annSubsetIdx,]
@@ -2315,8 +1908,6 @@ server <- shinyServer(function(input, output, session) {
     # Update selectize options with genes that are referenced in this VCF.
     gChoices = as.character(unique(geneAnnotateDf[annSubsetIdx,]$GENE_SYMBOL))
     # currentGeneSelected = input$geneList
-    
-    print("updateGeneSelectionList called from 2")
     
     if(!is.na(gChoices) && (length(gChoices) > 0))
     {
@@ -2326,14 +1917,6 @@ server <- shinyServer(function(input, output, session) {
     {
       updateGeneSelectionList(session, NA, NA)
     }
-    
-    # !!!!TODO!!!! should we really refresh the colour ramp pallet each time we subset?
-    # This will provide us with with a fresh colour map tailored for each result subset..
-    # However is that what we really want??
-    # ie., do we not want bright red to have a consistent meaning in every subset displayed,
-    # whether or not we are displaying all the data or just a subset thereof.
-    # Otherwise we can not visually compare one exploratory subset with the previous one..
-    # Try it this way...
     
     g=ggplot(result, aes(x = AF, y = ..density..)) + geom_histogram(bins=num_of_bins, fill = colours)
     
@@ -2356,36 +1939,36 @@ server <- shinyServer(function(input, output, session) {
     # Uodate targetVcfGgplot in case user wants to prprint this out in svg format.
     targetVcfGgplot <<- bla
     
-    bla  
+    return(bla)
     
   }, height = 408, width = 930)
   
   output$info <- renderText({
+    
     vcfFile = targetvcf()
     
     if(is.null(vcfFile))
-      return("Click on plot for read depth at a given VAF...")
+      return("Double click on plot for read depth at a given VAF...")
     
-    if(is.null(input$plot_click$x))
-      return("Click on plot for read depth at a given VAF...")
+    if(is.null(input$targetVcfPlotDblclick$x))
+      return("Double click on plot for read depth at a given VAF...")
     
     # Clear the Allele frequency range
     # (when the TopOne window is cleared by a user single click).
-    updateNumericInput(session, inputId="minF", value = 0)
-    updateNumericInput(session, inputId="maxF", value = 0)
+    # updateNumericInput(session, inputId="minF", value = 0)
+    # updateNumericInput(session, inputId="maxF", value = 0)
+    
+    updateNumericInput(session, "minF", value = 0)
+    updateNumericInput(session, "maxF", value = 0)
+    
+    
     # Clear plot data, there is nothing to save to SVG here.
     TopOneGgplot <<- NULL
-    
-    
-    # Make sure top plot is clear.
-    #output$TopOne = renderPlot({
-    #        return(NULL)
-    #    }, height = 200, width = 400, bg="transparent")
     
     # Run through the breaks finding out which one this mouse click has landed in.
     
     # You might think we could find this out with something like, (since x ranges here from 0-1)
-    # input$plot_click$x * <number of bins>
+    # input$targetVcfPlotDblclick$x * <number of bins>
     # However with gg_plot the first bin is generally half this size of all the other bins (to center bins etc.).
     # Also, you may request a number of bins up front, but there is no guarantee you will get it (I think..)
     # I can find no guarantee of where gg_plot puts its breaks, other than looking directly at the gg_plot object.
@@ -2393,7 +1976,7 @@ server <- shinyServer(function(input, output, session) {
     
     i = 1
     while (i < 500) {
-      if(input$plot_click$x < plot_data$gg_b_object$xmin[i])
+      if(input$targetVcfPlotDblclick$x < plot_data$gg_b_object$xmin[i])
       {
         i = i-1
         break
@@ -2419,11 +2002,9 @@ server <- shinyServer(function(input, output, session) {
     
     num_bins_in = i
     
-    # TODO!!!! We need to print out the bin width at this VAF to the user on click... VAF on its own does not mean much..
-    
     # Pull the avg. depth out of the dp_breaks vector.
     # We worked this out before when creating the colour gradient.
-    # return(paste0("VAF = ", input$plot_click$x, ", avg. depth = ", plot_data$dp_breaks[num_bins_in]))
+    # return(paste0("VAF = ", input$targetVcfPlotDblclick$x, ", avg. depth = ", plot_data$dp_breaks[num_bins_in]))
     
     # TODO!!!! check the limits on the breaks here, is it xmin >= B < xmax or is it xmin > B =< xmax ???
     # I think it's the former but check it out....
@@ -2441,7 +2022,8 @@ server <- shinyServer(function(input, output, session) {
     }
     
     ##################################################
-    # TODO!!!! Do we want to annotate these variants?
+    # TODO!!!!/ Done???? Do we want to keep this?
+    #  Do we want to annotate these variants?
     # We could do something like,
     
     # Subset out all the SNVs within required allele freq. range.
@@ -2471,12 +2053,7 @@ server <- shinyServer(function(input, output, session) {
       rtnString = paste0(rtnString,'<div style="font-family:monospace !important; cursor: pointer; display:inline-block; color: blue; text-decoration: underline"><select style="background-color:transparent; font-family:monospace !important; font-size: 80%; cursor: pointer; border:0px; outline:0px; -webkit-appearance: none !important;">',paste(glist,collapse = ''),'</select></div>')
       
     }
-    
-    
-    
     ##################################################
-    
-    
     
     return(rtnString)
     
@@ -2489,15 +2066,6 @@ server <- shinyServer(function(input, output, session) {
       return(NULL) 
     
     req(targetvcf)
-    
-    
-    # Displays the 'Display PASS variants?' checkbox at top, before displaying filters...
-    
-    #    checkboxGroupInput('activeFilters', '', inline = TRUE,
-    #                       choices = vcfFile$filterTypes)
-    
-    # Let's try replacing the above with this...
-    # Putting in the html ourselves give us much more control over the configuration than checkboxGroupInput() etc..
     
     htmlString="<div align='center' class='outer InvisableAtStart' style='padding:5px'>"
     
@@ -2526,11 +2094,6 @@ server <- shinyServer(function(input, output, session) {
     # Put in a select / clear all divs to shortcut checkbox selection.
     htmlString=paste0(htmlString,"<div style='cursor: pointer; display:inline-block; font-size: x-small; color: blue; text-decoration: underline' onclick='shinyToggleGroup(\"activeFilters\",true)'>select all</div><div style='display:inline-block; font-size: x-small; color: blue;'>&nbsp;|&nbsp;</div><div style='cursor: pointer; display:inline-block; font-size: x-small; color: blue; text-decoration: underline' onclick='shinyToggleGroup(\"activeFilters\",false);'>clear all</div>")
     
-    # Only works if there is already a slider on the page...
-    # htmlString=paste0(htmlString,sliderInput("depthThreshcccc", "Depth threshold:",
-    #  min = 0, max = 1000, value = 500
-    # ))
-    
     
     # Leave it to the UI section to close off this div.
     # This is because (for some reason) we can't put a slider in her by pasting it onto the html string..
@@ -2558,37 +2121,14 @@ server <- shinyServer(function(input, output, session) {
     minDepth = round(minDepth,digits=2)
     maxDepth = round(maxDepth,digits=2)
     
-    updateNumericInput(session, "depthThresh", value = minDepth, min = 3, max = maxDepth, step = 1)
-    
-    print("DEBUG>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-    
-    
+    updateNumericInput(session, "depthThresh", value = minDepth, min = 3, max = maxDepth, step = 1)  
     minTlod = min(vcfFile$data$T_LOD)
-    maxTlod = max(vcfFile$data$T_LOD)
-    
-    print(head(vcfFile$data$T_LOD))
-    print(head(vcfFile$data$T_LOD))   
-    
-    print("DEBUG>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")    
-    
-    
-    
-    # midTlod = minTlod + (maxTlod - minTlod)/2
-    
-    # Again leave the mid and min depth the same for now.
-    # The user can push the bar up as they want.
-    midTlod = minTlod
-    
-    print(">>>>>>>>>>>>>>minTlod, maxTlod>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-    print(minTlod)
-    print(maxTlod)
-    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+    maxTlod = max(vcfFile$data$T_LOD)   
     
     # We need to round the min and max values to the nearest 2 places of decimal to it fits with our step below.
     minTlod = round(minTlod,digits=2)
     maxTlod = round(maxTlod,digits=2)
     
-    # updateSliderInput(session, "tlodThresh", "TLOD threshold:", value = midTlod, min = minTlod, max = maxTlod)
     updateNumericInput(session, "tlodThresh", value = 6.3, min = minTlod, max = maxTlod, step = 0.01)
     
     # Now we've got a plot update gene list the annotation.
@@ -2597,24 +2137,17 @@ server <- shinyServer(function(input, output, session) {
     annSubsetIdx = !is.na(match(geneAnnotateDf$QUERYID, vcfFile$data$OIDX))
     
     # Update selectize options with genes that are referenced in this VCF.
-    
-    print(">>>>>>>UPDATING geneList<<<<<<<<<<<<<<")
-    print(head(as.character(unique(geneAnnotateDf[annSubsetIdx,]$GENE_SYMBOL))))
-    
     updateSelectizeInput(session,"geneList", choices = as.character(unique(geneAnnotateDf[annSubsetIdx,]$GENE_SYMBOL)))
     
     
     # When the div is loaded expose the sliders.
     # No point in having sliders etc. hanging around unless they are connected to something....
-    
     htmlString=paste0(htmlString,'<script type="text/javascript">
                                   revealElements("InvisableAtStart");
                                   document.getElementById("selectDiv").style.backgroundImage="none";
                                   </script>')
     
-    tags$html(HTML(htmlString))
-    
-    
+    return(tags$html(HTML(htmlString)))
   })
   
   
