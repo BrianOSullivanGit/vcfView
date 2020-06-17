@@ -75,6 +75,44 @@ SIGNATURE_ORDER = c("A[C>A]A", "A[C>A]C", "A[C>A]G", "A[C>A]T", "C[C>A]A", "C[C>
                     "C[T>G]A", "C[T>G]C", "C[T>G]G", "C[T>G]T", "G[T>G]A", "G[T>G]C", "G[T>G]G", 
                     "G[T>G]T", "T[T>G]A", "T[T>G]C", "T[T>G]G", "T[T>G]T")
 
+# Set up extensible inset functions.
+# Source the file setting up user specific inset functions.
+source("exten.R")
+
+# Start setting up the inset function names for the radio button vector.
+# Include the default ones first.
+rbInsetFns <<- c("Signatures" = "SigC",
+                 "Mutational Processes" = "MutP",
+                 "Protein" = "PepS",
+                 "Candidate Filters" = "Filt")
+
+# Now see if there are any more user specific ones to add.
+# Look in exten.R to find out.
+extenInsetFnMapList = c()
+con = file("exten.R", "r")
+while ( TRUE ) {
+  line = readLines(con, n = 1)
+  if ( length(line) == 0 ) {
+    break
+  }
+  if(grepl("^[ ]*exten_str_",line)) {
+    line = gsub("^[ ]*exten_str_", "", line) 
+    prefix = gsub("=.*", "", line)
+    description = gsub(".*=[ ]*\"", "", line)
+    description = gsub("\"", "", description)   
+    newOption = c(prefix)
+    names(newOption) <- c(description)
+    
+    extenInsetFnMapList = c(extenInsetFnMapList,newOption)
+    rbInsetFns <<- c(rbInsetFns,newOption)  
+  }    
+}
+close(con)
+
+extenInsetFnMapList = paste0('if(insetFn == "',extenInsetFnMapList,'") { return(exten_fn_',extenInsetFnMapList,'(result, xMin,xMax))}', sep="")
+extenInsetFnMapList = paste(extenInsetFnMapList, collapse="\n")
+extenInsetFnMapList = paste('exten_makeCall <- function(insetFn,result, xMin,xMax) {', extenInsetFnMapList, "}\n", sep="\n")
+source(textConnection(extenInsetFnMapList))
 
 
 # Function sets up filter option checkbox element and help text as tooltip.
@@ -84,7 +122,6 @@ filterCheckboxHtml <- function(inputId, value, helpText) {
 
 # Make sure the choices of gene in the selectiveInput only contains the genes within the
 # new subset the user has created (gChoices passed from the caller).
-
 updateGeneSelectionList <- function(session, gChoices, currentGeneSelected)
 {   
   
@@ -112,9 +149,7 @@ updateGeneSelectionList <- function(session, gChoices, currentGeneSelected)
       {
         updateSelectizeInput(session,"geneList", choices = gChoices, selected = gChoices[1])
       }
-      
     }
-    
   }
 }
 
@@ -188,7 +223,6 @@ maxMedianBinDepth <- function(nBins, result)
   colours <- colorRampPalette(c("red", "green"))(maxDp)[dp_colour_breaks]
   
   return(colours)
-  
 }
 
 # processVcf()
@@ -442,11 +476,8 @@ processVcf <- function(csvPath, session) {
   # TODO!!!! put in a sanity check that all the lengths in next 3 lines are the same.
   tlod_t = integer(length(info(vcf)$TLOD))
   af_t = integer(length(geno(vcf[,tumourSlotNum])$AF))
-  
   af_norm_t = integer(length(geno(vcf[,normalSlotNum])$AF))
-  
   alts_t = character(length(rowRanges(vcf)$ALT))
-  
   maLogicV = (lengths(info(vcf)$TLOD) > 1)
   
   # Are there any multiallelic entries in this VCF?
@@ -660,15 +691,8 @@ processVcf <- function(csvPath, session) {
   symsIdx = !is.na(geneId)
   geneNames[symsIdx] = unlist(lookUp(geneId[symsIdx], 'org.Hs.eg', "SYMBOL"))
   
-  
-  # TODO!!!! FINISH HERE
   # Sometimes we get back NAs from Entrez Gene identifiers annotation database.
   # In that case set the name to 'UNKNOWN'
-  if(sum(is.na(geneNames)) > 0)
-  {
-    
-  }
-  
   geneNames[is.na(geneNames)] = "UNKNOWN"
   
   # Update global list of all genes we have in this VCF.
@@ -826,24 +850,6 @@ getSnvMutationalMatrix <- function(result, lower_frange = NULL, upper_frange = N
   # or to fit this sample to a combination of the v3 cosmic known signatures.
   return(new_mat)
   
-}
-
-
-# Neutral evolution test plot..
-# 
-nevolution <- function(result, lower_frange = 0.45, upper_frange = 0.55)
-{
-  
-  
-  # Subset out all the SNVs within required allele freq. range.
-  snvIdx = which(result$AF > lower_frange &
-                   result$AF <= upper_frange)
-  
-  
-  
-  n <- neutralitytest(result$AF[snvIdx], fmin = lower_frange, fmax = upper_frange)
-  
-  return(lsq_plot(n))
 }
 
 # Lollypop peptide plot..
@@ -1251,9 +1257,6 @@ frange <- function(result, lower_frange = 0.45, upper_frange = 0.55)
   
 }
 
-
-
-
 ui <- shinyUI(
   fluidPage(
     
@@ -1360,15 +1363,18 @@ ui <- shinyUI(
                     numericInput("maxF", "max freq", value = 0, min = 0, max = 1, step = 0.01, width = "80px"),
                     HTML("</div>"),
                     HTML("<div class='InvisableAtStart' style='display:inline-block; padding-left: 10px;'>"),
-                    selectizeInput("geneList", "select gene",choices = c("Please load a VCF first"), selected = NULL, multiple = FALSE, options = list(), width = "120px"),                    
+                    selectizeInput("geneList",
+                                   "select gene",
+                                   choices = c("Please load a VCF first"),
+                                   selected = NULL,
+                                   multiple = FALSE,
+                                   options = list(),
+                                   width = "120px"),                    
                     HTML("</div>"),            
-                    HTML(paste0('<div class="InvisableAtStart" style="padding:2px" align="center">')),                      
-                    radioButtons("afWindow", "Inset window function:",
-                                 c("Signatures" = "SigC",
-                                   "Mutational Processes" = "MutP",
-                                   "Neutrality" = "Nevol",
-                                   "Protein" = "PepS",
-                                   "Candidate Filters" = "Filt"),
+                    HTML(paste0('<div class="InvisableAtStart" style="padding:2px" align="center">')),
+                    radioButtons("afWindow",
+                                 "Inset window function:",
+                                 rbInsetFns,
                                  inline=TRUE),
                     HTML(paste0('</div>')),
                     HTML("</div></div>"),          
@@ -1764,12 +1770,6 @@ server <- shinyServer(function(input, output, session) {
       # Plot mutational Processes contributions.
       return(frange(result,xMin,xMax))
     }
-    else if(input$afWindow == "Nevol")
-    {
-      # Check for neutral evolution within this range..
-      # (TODO!!!! put in checks to ensure range make sence with plody assumptions etc..)
-      return(nevolution(result, xMin,xMax))
-    }
     else if(input$afWindow == "PepS")
     {
       
@@ -1785,44 +1785,49 @@ server <- shinyServer(function(input, output, session) {
         return(NULL)
       } 
       return(lpoppep(session, result, xMin,xMax, input$geneList))
-    }   
+    }
+    else if(input$afWindow == "Filt")
+    {
+      # Just plot the filters..
+      
+      candidateVariantsFilterField = result[result$AF>xMin & result$AF<=xMax,"FILTER"]
+      
+      numCandidateVariants = length(candidateVariantsFilterField)
+      
+      percentOfPassedCandidates = 100 * (sum(candidateVariantsFilterField == "PASS") / numCandidateVariants)
+      
+      filterAggregation = result[result$AF>xMin & result$AF<=xMax,"FILTER"]
+      
+      failedCandidateVariantsFilterField = candidateVariantsFilterField[candidateVariantsFilterField != "PASS"]
+      
+      numFailedCandidateVariants = length(failedCandidateVariantsFilterField)
+      
+      filterAggregation=failedCandidateVariantsFilterField # TODO!!!! update 
+      
+      filterAggregationUl = unlist(strsplit(filterAggregation,';'))
+      
+      if(length(filterAggregationUl) > 0)
+      {
+        filterAggregationDf = data.frame(filter_types=filterAggregationUl)
+        p = ggplot(filterAggregationDf, aes(x = filter_types, stat(count)/numFailedCandidateVariants)) + geom_bar() + scale_y_continuous(limits = c(0,1)) + ggtitle(paste0("[", signif(xMin,6), "," , signif(xMax,6), "), ", numCandidateVariants, " candidates, ", signif(percentOfPassedCandidates,6), "% PASS")) +
+          labs(y="Failed fraction", x = "Filter types") +  theme(axis.text.x=element_text(family="serif", angle=45,hjust=1,vjust=0.95, colour="black", size = 12))
+        # Record this plot in TopOneGgplot incase the user wants to save it as svg.
+        TopOneGgplot <<- p
+        return(p)
+        
+      }
+      
+      else
+        return(NULL)
+      
+    }
     else
     {
-      # TODO!!!! put remaining logic in this function into a separate function and call it from here.
-      # Tidy this up!
+      # Call the appropriate user defined function from extensible list.
+      return(exten_makeCall(input$afWindow, result, xMin,xMax))
     }
     
-    # Otherwise just plot the filters..
     
-    candidateVariantsFilterField = result[result$AF>xMin & result$AF<=xMax,"FILTER"]
-    
-    numCandidateVariants = length(candidateVariantsFilterField)
-    
-    percentOfPassedCandidates = 100 * (sum(candidateVariantsFilterField == "PASS") / numCandidateVariants)
-    
-    filterAggregation = result[result$AF>xMin & result$AF<=xMax,"FILTER"]
-    
-    failedCandidateVariantsFilterField = candidateVariantsFilterField[candidateVariantsFilterField != "PASS"]
-    
-    numFailedCandidateVariants = length(failedCandidateVariantsFilterField)
-    
-    filterAggregation=failedCandidateVariantsFilterField # TODO!!!! update 
-    
-    filterAggregationUl = unlist(strsplit(filterAggregation,';'))
-    
-    if(length(filterAggregationUl) > 0)
-    {
-      filterAggregationDf = data.frame(filter_types=filterAggregationUl)
-      p = ggplot(filterAggregationDf, aes(x = filter_types, stat(count)/numFailedCandidateVariants)) + geom_bar() + scale_y_continuous(limits = c(0,1)) + ggtitle(paste0("[", signif(xMin,6), "," , signif(xMax,6), "), ", numCandidateVariants, " candidates, ", signif(percentOfPassedCandidates,6), "% PASS")) +
-                labs(y="Failed fraction", x = "Filter types") +  theme(axis.text.x=element_text(family="serif", angle=45,hjust=1,vjust=0.95, colour="black", size = 12))
-  # Record this plot in TopOneGgplot incase the user wants to save it as svg.
-  TopOneGgplot <<- p
-  return(p)
-
-    }
-    
-    else
-      return(NULL)
     
   }, height = 200, width = 600, bg="transparent")
   
