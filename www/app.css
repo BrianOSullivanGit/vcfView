@@ -1,7 +1,5 @@
-
-
 body {
-	background-image: url('background.png');
+	background-image: url('gray-wall-textures-background_74190-4389.jpg');
 	background-size: cover;
 }
 
@@ -465,5 +463,3 @@ input[type=radio] {
 .onoffswitch-checkbox:checked+.onoffswitch-label .onoffswitch-switch {
 	right: 0px;
 }
-
-

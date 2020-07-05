@@ -1,3 +1,4 @@
+// Javascript: Toggles radiobutton checked setting.
 function toggle(eID, boolSetting) {
     eID.checked = boolSetting;
 }
@@ -7,6 +8,14 @@ function revealElements(classN) {
     els = document.getElementsByClassName(classN);
     for (var i = 0, n = els.length; i < n; i++) {
         document.getElementsByClassName(classN)[i].style.opacity = 1;
+    }
+}
+
+// Javascript: Hides elements that by setting opacity = 0.
+function hideElements(classN) {
+    els = document.getElementsByClassName(classN);
+    for (var i = 0, n = els.length; i < n; i++) {
+        document.getElementsByClassName(classN)[i].style.opacity = 0;
     }
 }
 
@@ -35,3 +44,29 @@ function shinyToggleGroup(eIDstring, boolSetting) {
         priority: 'event'
     });
 }
+
+
+// Message handler to change the backbround image of an element when triggered from Rshiny.
+// (used to add loading notification etc.)
+Shiny.addCustomMessageHandler("changeBackgroundImage_h_id", changeBackgroundImage);
+
+function changeBackgroundImage(args) {
+    document.getElementById(args.eName).style.backgroundImage = "url(" + args.img + ")"
+}
+
+
+// Message handler to hide UI elements while load in progress.
+Shiny.addCustomMessageHandler("hideUIelementsOnLoad_h_id", hideUIelementsOnLoad);
+
+function hideUIelementsOnLoad(className) {
+    hideElements(className);
+}
+
+
+// Message handler to reveal UI elements once everything's loaded.
+Shiny.addCustomMessageHandler("revealUIelementsOnLoad_h_id", revealUIelementsOnLoad);
+
+function revealUIelementsOnLoad(className) {
+    revealElements(className);
+}
+
