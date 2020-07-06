@@ -740,11 +740,7 @@ else
   
   ####### v3 changes ##############
   
-  # v3signatures = read.csv("https://dcc.icgc.org/api/v1/download?fn=/PCAWG/mutational_signatures/Signatures/SP_Signatures/SigProfiler_reference_signatures/Sigprofiler_Exome_Signatures/sigProfiler_exome_SBS_signatures.csv")
-  
-  # TODO!!!! remove...
-  # Load locally while internet down..
-  v3signatures = read.csv("/home/sully/BIO_INFORMATICS/VCF_PARSE/Cancer_Informatics/COSMIC_v3/sigProfiler_exome_SBS_signatures.csv")
+  v3signatures = read.csv("https://dcc.icgc.org/api/v1/download?fn=/PCAWG/mutational_signatures/Signatures/SP_Signatures/SigProfiler_reference_signatures/Sigprofiler_Exome_Signatures/sigProfiler_exome_SBS_signatures.csv")
   
   
   if (nrow(v3signatures) != 96) 
