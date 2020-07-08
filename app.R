@@ -464,7 +464,7 @@ processVcf <- function(csvPath, session) {
   {
     MMQ_in_info <<- TRUE
   }
-else
+  else
   {
     MMQ_in_info <<- FALSE
   }
@@ -581,7 +581,7 @@ else
   else
   {
     # If not multi allelic no need to spend time going through loop above....
-
+    
     # Do we have an MMQ info field etc.
     if(MMQ_in_info)
     {
@@ -640,24 +640,24 @@ else
   print(paste0(">>>>>>>>>>>>>>>>>>>>>>>>>>>duration: ",(end_time - start_time),"<<<<<<<<<<<<<<<<<<<<"))
   
   
-#  print(length(as.character(seqnames(vcf[,tumourSlotNum]))))
-#  print(length(ranges(vcf[,tumourSlotNum])))
-#  print(length(as.character(rowRanges(vcf)$FILTER)))
-#  print(length(af_t))
-#  print(length(af_norm_t))
-#  print(length(as.numeric(dp_l)))
-#  print(length(as.numeric(dp_norm_l)))
-#  print(length(as.numeric(tlod_t)))
-#  print(length(refs_t))
-#  print(length(ma_t))
-#  print(length(alts_t))
-#  print(length(tnctx_t))
-#  if(MMQ_in_info)
-#  {
-#    print(length(mmq_t))
-#  }
-#  print(length(seq(1:oidx_length)))
-#  print(length(tnctx_t))
+  #  print(length(as.character(seqnames(vcf[,tumourSlotNum]))))
+  #  print(length(ranges(vcf[,tumourSlotNum])))
+  #  print(length(as.character(rowRanges(vcf)$FILTER)))
+  #  print(length(af_t))
+  #  print(length(af_norm_t))
+  #  print(length(as.numeric(dp_l)))
+  #  print(length(as.numeric(dp_norm_l)))
+  #  print(length(as.numeric(tlod_t)))
+  #  print(length(refs_t))
+  #  print(length(ma_t))
+  #  print(length(alts_t))
+  #  print(length(tnctx_t))
+  #  if(MMQ_in_info)
+  #  {
+  #    print(length(mmq_t))
+  #  }
+  #  print(length(seq(1:oidx_length)))
+  #  print(length(tnctx_t))
   
   
   
@@ -740,8 +740,15 @@ else
   
   ####### v3 changes ##############
   
-  v3signatures = read.csv("https://dcc.icgc.org/api/v1/download?fn=/PCAWG/mutational_signatures/Signatures/SP_Signatures/SigProfiler_reference_signatures/Sigprofiler_Exome_Signatures/sigProfiler_exome_SBS_signatures.csv")
-  
+  # Check if file is cached or if we need to fetch it.
+  if(file.exists("./www/sigProfiler_exome_SBS_signatures.csv"))
+  {
+    v3signatures = read.csv("./www/sigProfiler_exome_SBS_signatures.csv")
+  }
+  else
+  {
+    v3signatures = read.csv("https://dcc.icgc.org/api/v1/download?fn=/PCAWG/mutational_signatures/Signatures/SP_Signatures/SigProfiler_reference_signatures/Sigprofiler_Exome_Signatures/sigProfiler_exome_SBS_signatures.csv")
+  }
   
   if (nrow(v3signatures) != 96) 
     stop("Signatures file does not have 96 tri-nucleotide enteries. Are you sure this is an SBS cosmic file?")
@@ -877,7 +884,6 @@ else
                                 REFAA = coding$REFAA,
                                 VARAA = coding$VARAA)
   
-  
   # To fix bug with some MuTect2 GATK3 files.  
   # In GATK3 some variants are rejected without listing a TLOD value.
   # To be pragmatic, we will just remove these variants from our analysis so NA's are
@@ -1001,18 +1007,17 @@ lpoppep <- function(session, result, lower_frange = 0.45, upper_frange = 0.55, g
   #> levels(geneAnnotateDf$CONSEQUENCE)
   #[1] "frameshift"    "nonsense"      "nonsynonymous" "synonymous"
   # 
+  
   # So our colours are.
-  cseqColours = c("#5C9BC5","#E6595A","#E6595A","#F0DADA")
+  cseqColours = c("#5C9BC5","#E6595A","#6BB767","#F0DADA")
   # Name them to keep the levels consistent.
-  names(cseqColours) <- levels(geneAnnotateDf$CONSEQUENCE)
+  names(cseqColours) <- c("frameshift","nonsense","nonsynonymous","synonymous")
+  
   colScale <- scale_colour_manual(name = "CONSEQUENCE",values = cseqColours)
-  
-  
   
   # Subset out all the SNVs within required allele freq. range.
   snvIdx = which(result$AF > lower_frange &
                    result$AF <= upper_frange)
-  
   
   # pull out the annotation for this this subset using the oidx. 
   annSubsetIdx = !is.na(match(geneAnnotateDf$QUERYID, result$OIDX[snvIdx]))
