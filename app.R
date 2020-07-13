@@ -2180,8 +2180,7 @@ server <- shinyServer(function(input, output, session) {
     targetVcfGgplot <<- bla
     
     return(bla)
-    
-  }, height = 408, width = 930)
+  })
   
   output$info <- renderText({
     
