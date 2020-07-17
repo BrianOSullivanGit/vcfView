@@ -55,6 +55,10 @@ TopOneGgplot <<- NULL
 # Cache the max depth / break of any density distribution we have plotted.
 maxDepthInBreaks <<- 0
 
+# TODO!!!! Remove this flage and replace it with processing similar to that
+# used to handle the presence or absence of TLOD in the VCF, ie.,
+#  !any(grepl("^TLOD$",colnames(info(vcf)))) 
+#
 # Indicates if MMQ present in VCF info field.
 # This is set to TRUE if it is present in the info field when the VCF is loaded.
 MMQ_in_info <<- FALSE
@@ -286,11 +290,13 @@ processVcf <- function(csvPath, session) {
     
     # Try and deduce which version of the genome we are working with
     # from the GATK commandline so we can load the correct annotation etc.
-    if(grepl("^##GATKCommandLine.*ID=[mM]u[tT]ect2",line)) {
+    if(grepl("^##GATKCommandLine.*ID=[mM]u[tT]ect2",line) && length(genome_str) == 0) {
       line = gsub("^##GATKCommandLine.*--reference[ ][ ]*.*GRCh", "", line)
+      line = gsub("^##GATKCommandLine.*--reference[ ][ ]*.*hg", "", line)
       
       # Alternative reference sequence may be identified as (for MuTect2 GATK3),
       line = gsub("^##GATKCommandLine.*reference_sequence=.*GRCh", "", line)
+      line = gsub("^##GATKCommandLine.*reference_sequence=.*hg", "", line)
       
       genome_str =  gsub("[^0-9].*$", "", line)
       
@@ -300,14 +306,34 @@ processVcf <- function(csvPath, session) {
       
     }
     
+    # Alternative genome annotation in metadata.
+    if(grepl("^##reference=.*/",line) && length(genome_str) == 0) {
+      line = gsub("^##reference=.*/", "", line)
+      line = gsub("^hg", "", line)
+      genome_str = gsub("^GRCh", "", line)      
+      genome_str =  gsub("[^0-9].*$", "", line)
+      
+      # Sub 37 with 19 to conform to UCSC naming convention in their
+      # annotation libraries which we load later on.
+      genome_str =  gsub("^37$", "19", genome_str)      
+    }
+    
+    
     # Find out which slot is allocated to tumour/normal.
-    # This will vary depending on the GATK3/GATK4.   
+    # This will vary depending on the GATK3/GATK4/varscan etc..   
     if(grepl("^#CHROM\\tPOS\\tID\\tREF\\tALT\\tQUAL\\tFILTER\\tINFO\\tFORMAT\\tNORMAL\\tTUMOR",line)) {
       # GATK3 found.
       tumourSlotNum = 2
       normalSlotNum = 1
     }
     
+    # Find out which slot is allocated to tumour/normal.
+    # This will vary depending on the GATK3/GATK4/varscan etc..   
+    if(grepl("^#CHROM\\tPOS\\tID\\tREF\\tALT\\tQUAL\\tFILTER\\tINFO\\tFORMAT\\tTUMOR\\tNORMAL",line)) {
+      # GATK3 found.
+      tumourSlotNum = 1
+      normalSlotNum = 2
+    }
     
     # If the samples are named in the metadata, parse them out.
     if(grepl("^##normal_sample=",line)) {
@@ -315,18 +341,16 @@ processVcf <- function(csvPath, session) {
     }
     if(grepl("^##tumor_sample=",line)) {
       tumourSampleName =  gsub("^^##tumor_sample=", "", line)
-    }
-    
+    } 
     
     if(grepl(paste0("^#CHROM\\tPOS\\tID\\tREF\\tALT\\tQUAL\\tFILTER\\tINFO\\tFORMAT\\t", normalSampleName, "\\t", tumourSampleName),line)) {
-      # Looks like GATK4, normal slot 1 and tumour slot 2. 
+      # Looks like normal slot 1 and tumour slot 2. 
       normalSlotNum = 1
       tumourSlotNum = 2
     }
     
     if(grepl(paste0("^#CHROM\\tPOS\\tID\\tREF\\tALT\\tQUAL\\tFILTER\\tINFO\\tFORMAT\\t", tumourSampleName, "\\t", normalSampleName),line)) {
-      # Looks like GATK4, normal slot 2 and tumour slot 1.
-      
+      # Looks like normal slot 2 and tumour slot 1.     
       normalSlotNum = 2
       tumourSlotNum = 1
       
@@ -351,6 +375,13 @@ processVcf <- function(csvPath, session) {
   
   colnames(filterDescriptions) <- c("ID","Description")
   
+  # Check if we parsed out a valid genome annotation, make a guess if not..
+  # TODO!!!! replace this with a modal of somekind..
+  if(genome_str != "19" && genome_str != "38")
+  {
+    warning("No genome string found in metadata, trying hg38..")
+    genome_str = "38"
+  } 
   
   # Load UCSC BSgenome and corresponding annotation.
   # TODO!!!! If these libraries are not installed ask user
@@ -377,7 +408,7 @@ processVcf <- function(csvPath, session) {
     if(any(grepMatch))
     {
       problemLibs=paste0("     ","detach(\"package:",packagesAlreadyLoaded[grepMatch],"\", unload = TRUE)\n",collapse = "")     
-      warningString=paste0("\nYou may need to unload the following libraries with\n\n",problemLibs,"\n before running this application with hg19 genome based UCSC annotation.\n")  
+      warningString=paste0("\n You may need to unload the following libraries with\n\n",problemLibs,"\n before running this application with hg19 genome based UCSC annotation.\n Otherwise library incompatabilities may cause this app to crash with an error\n\n     \"regions beyond the boundaries of non-circular sequence..\"\n\n below.\n")  
       warning(warningString)      
     }   
   }
@@ -407,6 +438,30 @@ processVcf <- function(csvPath, session) {
   
   vcf = readVcf(csvPath, genome_name)
   
+  # Check if this is not a Mutect2 VCF and if we can still work with it.
+  multiplePossibleAlleles = (lengths(rowRanges(vcf)$ALT) > 1)
+
+  if(any(multiplePossibleAlleles) && !any(grepl("^TLOD$",colnames(info(vcf)))))
+  {   
+    # If we get here and are still dealing with multiple possible alleles then
+    # this is definetly not a Mutect2 VCF.
+    # In that case, take the nuclear option here for now and remove these records from processing.
+    # Inform the user with a clear warning.
+    # TODO!!!!
+    # Looking into allowing the user the option to specify the field and condition they
+    # require to calculate the index to select among multiple possible alternative alleles.
+    # This should enable vcfView to work with VCFs generated by most other somatic variant callers
+    # without the need to remove records with multiple possible alternative alleles.
+    
+    numMultiAlt = sum(multiplePossibleAlleles)
+    totalAlts = length(multiplePossibleAlleles)
+    
+    warning(paste0("No TLOD field found but records with multiple possible alternative alleles are present.\n  This does not look like a Mutect2 VCF file.\n  vcfView uses the index of the maximum TLOD value (Mutect2 specific VCF INFO field)\n  to select within fields which contain entries relating to multiple possible alt. alleles.\n  Updates to allow the user to specify a different field to index on\n  for use with other callers will be provided in a future release.\n  For now however for non Mutect2 VCF files,\n  records with multiple possible alternative alleles will be removed from processing.\n  Removing ", numMultiAlt, " of ", totalAlts, " records.\n\n"))
+    
+    vcf = vcf[!multiplePossibleAlleles] 
+  }
+
+  
   # TODO!!!! sampleNames here is now redundant, remove it and references..
   sampleNames = rownames(colData(vcf))
   
@@ -435,13 +490,11 @@ processVcf <- function(csvPath, session) {
   # Just keep autosomal & XY. Then we will be able to annotate with TxDb etc..
   vcf <- keepSeqlevels(vcf, groups, pruning.mode = "tidy")
   
-  
   ################ 
   
   
   # TODO!!!! update on success only...
   plot_data$vcfAnnotateObject <<- vcf 
-  
   
   # Where there are multi allelic variants at a given loci,
   # we need to filter out the one with that gives the max TLOD value.
@@ -453,7 +506,7 @@ processVcf <- function(csvPath, session) {
   # Again the '[,1]' below subsets out the first sample (tumour sample) from geno slot.
   tlod_l = info(vcf)$TLOD
   alt_l = rowRanges(vcf)$ALT
-  # (Take the allelic fraction from the first sample,, ie., tumour)
+  # Tumour / normal allelic fractions
   af_l = geno(vcf[,tumourSlotNum])$AF
   af_norm_l = geno(vcf[,normalSlotNum])$AF
   
@@ -500,14 +553,25 @@ processVcf <- function(csvPath, session) {
   
   
   # Number of records in original VCF.
-  oidx_length = length(info(vcf)$TLOD)
+  oidx_length = nrow(info(vcf))
   
-  # TODO!!!! put in a sanity check that all the lengths in next 3 lines are the same.
-  tlod_t = integer(length(info(vcf)$TLOD))
-  af_t = integer(length(geno(vcf[,tumourSlotNum])$AF))
-  af_norm_t = integer(length(geno(vcf[,normalSlotNum])$AF))
+  
+  if(any(grepl("^TLOD$",colnames(info(vcf)))))
+  {
+    tlod_t = integer(length(info(vcf)$TLOD))
+    maLogicV = (lengths(info(vcf)$TLOD) > 1)
+  }
+  else
+  {
+    #stop("No TLOD found in info field. Are you sure this is a Mutect2 VCF file?")
+    warning("No TLOD found in INFO field. Are you sure this is a Mutect2 VCF file?")
+    maLogicV = FALSE
+  }
+  
+  af_t = integer(nrow(info(vcf)))
+  af_norm_t = integer(nrow(info(vcf)))
   alts_t = character(length(rowRanges(vcf)$ALT))
-  maLogicV = (lengths(info(vcf)$TLOD) > 1)
+  
   
   if(MMQ_in_info)
   { 
@@ -521,6 +585,7 @@ processVcf <- function(csvPath, session) {
   # If so, for each multiallelic record, pick the one with the highest TLOD to use.  
   if(any(maLogicV))
   {
+    print("Processing records with multiple possible allels.")
     # Indices to Multiallelic entries.
     maIdx = which(maLogicV)
     # Indices to single allelic entries.
@@ -587,14 +652,36 @@ processVcf <- function(csvPath, session) {
     {
       mmq_t = unlist(info(vcf)$MMQ)[rep(c(FALSE,TRUE),length(info(vcf)$MMQ))]
     }
-    tlod_t = as.numeric(info(vcf)$TLOD)
-    af_t = as.numeric(geno(vcf)$AF[,tumourSlotNum])
-    af_norm_t = as.numeric(geno(vcf)$AF[,normalSlotNum])
+    
+    
+    if(any(grepl("^TLOD$",colnames(info(vcf)))))
+    {
+      tlod_t = as.numeric(info(vcf)$TLOD)      
+    }
+    else
+    {
+      # Hack to get it going with non-Mutect2 vcfs for now (ie., no tlod)
+      tlod_t = rep(0,nrow(info(vcf)))
+    }
+    
+    if(any(grepl("^AF$",names(geno(vcf)))))
+    {
+      af_t = as.numeric(geno(vcf)$AF[,tumourSlotNum])
+      af_norm_t = as.numeric(geno(vcf)$AF[,normalSlotNum])
+    }
+    else
+    {
+      warning("No AF found in FORMAT field. Are you sure this is a Mutect2 VCF file?\n  Only Mutect2 VCF files have been tested with vcfView.\n  Trying anyways, assuming no multiallelic entries...\n  Trying to deduce AF from REF/ALT depts, this may die....we will see.")
+      
+      # AF = AD/DP
+      # Order is REF,ALT,REF,ALT etc.
+      af_t =  unname(unlist(geno(vcf[,tumourSlotNum])$AD)[rep(c(FALSE,TRUE),length(geno(vcf[,tumourSlotNum])$AD))] / geno(vcf[,tumourSlotNum])$DP)
+      af_norm_t =  unname(unlist(geno(vcf[,normalSlotNum])$AD)[rep(c(FALSE,TRUE),length(geno(vcf[,normalSlotNum])$AD))] / geno(vcf[,normalSlotNum])$DP)
+      
+    }
+    
     alts_t = as.character(unlist(rowRanges(vcf)$ALT))
   }
-  
-  
-  # print(head(data.frame(alts_t,tlod_t,af_t,af_norm_t)))
   
   # Now pull out the reference alleles.
   # We know these are one element lists already so no need to do anything other than the next line.
@@ -640,24 +727,24 @@ processVcf <- function(csvPath, session) {
   print(paste0(">>>>>>>>>>>>>>>>>>>>>>>>>>>duration: ",(end_time - start_time),"<<<<<<<<<<<<<<<<<<<<"))
   
   
-  #  print(length(as.character(seqnames(vcf[,tumourSlotNum]))))
-  #  print(length(ranges(vcf[,tumourSlotNum])))
-  #  print(length(as.character(rowRanges(vcf)$FILTER)))
-  #  print(length(af_t))
-  #  print(length(af_norm_t))
-  #  print(length(as.numeric(dp_l)))
-  #  print(length(as.numeric(dp_norm_l)))
-  #  print(length(as.numeric(tlod_t)))
-  #  print(length(refs_t))
-  #  print(length(ma_t))
-  #  print(length(alts_t))
-  #  print(length(tnctx_t))
-  #  if(MMQ_in_info)
-  #  {
-  #    print(length(mmq_t))
-  #  }
-  #  print(length(seq(1:oidx_length)))
-  #  print(length(tnctx_t))
+  #    print(length(as.character(seqnames(vcf[,tumourSlotNum]))))
+  #    print(length(ranges(vcf[,tumourSlotNum])))
+  #    print(length(as.character(rowRanges(vcf)$FILTER)))
+  #    print(length(af_t))
+  #    print(length(af_norm_t))
+  #    print(length(as.numeric(dp_l)))
+  #    print(length(as.numeric(dp_norm_l)))
+  #    print(length(as.numeric(tlod_t)))
+  #    print(length(refs_t))
+  #    print(length(ma_t))
+  #    print(length(alts_t))
+  #    print(length(tnctx_t))
+  #    if(MMQ_in_info)
+  #    {
+  #      print(length(mmq_t))
+  #    }
+  #    print(length(seq(1:oidx_length)))
+  #    print(length(tnctx_t))
   
   
   
@@ -667,46 +754,38 @@ processVcf <- function(csvPath, session) {
   # (BTW. leave POS = unname(as.character(ranges(vcf[,1]))) as an IRanges object for now. )
   # ( Later we can modify with POS = unname(as.character(ranges(vcf[,1]))) if required  )
   
+  vcfTable = data.frame(CHROM = as.character(seqnames(vcf[,tumourSlotNum])), POS = ranges(vcf[,tumourSlotNum]), FILTER = as.character(rowRanges(vcf)$FILTER), AF = af_t, AF_IN_NORM = af_norm_t, DP = as.numeric(dp_l), DP_IN_NORM = as.numeric(dp_norm_l), REF = refs_t, ALT = ma_t, MA = alts_t, TNC = tnctx_t, OIDX = seq(1:oidx_length), CLASS = tnctx_t)
+  
+  rm(alt_l,
+     af_l,
+     af_norm_l,
+     dp_l,
+     dp_norm_l,
+     af_t,
+     af_norm_t,
+     refs_t,
+     ma_t,
+     alts_t,
+     tnctx_t)
+  
+  
   if(MMQ_in_info)
   {
-    vcfTable = data.frame(CHROM = as.character(seqnames(vcf[,tumourSlotNum])), POS = ranges(vcf[,tumourSlotNum]), FILTER = as.character(rowRanges(vcf)$FILTER), AF = af_t, AF_IN_NORM = af_norm_t, DP = as.numeric(dp_l), DP_IN_NORM = as.numeric(dp_norm_l), T_LOD = as.numeric(tlod_t), REF = refs_t, ALT = ma_t, MA = alts_t, TNC = tnctx_t, MMQ = mmq_t, OIDX = seq(1:oidx_length), CLASS = tnctx_t)
-    
+    # Add a MMQ column.
+    vcfTable = cbind(vcfTable,MMQ = mmq_t)    
     # Clean up.
-    rm(tlod_l,
-       alt_l,
-       af_l,
-       af_norm_l,
-       mmq_l,
-       dp_l,
-       dp_norm_l,
-       af_t,
-       af_norm_t,
-       tlod_t,
-       refs_t,
-       ma_t,
-       alts_t,
-       tnctx_t,
-       mmq_t)
+    rm(mmq_t,mmq_l)
   }
-  else
+  
+  
+  if(any(grepl("^TLOD$",colnames(info(vcf)))))
   {
-    vcfTable = data.frame(CHROM = as.character(seqnames(vcf[,tumourSlotNum])), POS = ranges(vcf[,tumourSlotNum]), FILTER = as.character(rowRanges(vcf)$FILTER), AF = af_t, AF_IN_NORM = af_norm_t, DP = as.numeric(dp_l), DP_IN_NORM = as.numeric(dp_norm_l), T_LOD = as.numeric(tlod_t), REF = refs_t, ALT = ma_t, MA = alts_t, TNC = tnctx_t, OIDX = seq(1:oidx_length), CLASS = tnctx_t)
+    # Add a TLOD column.
+    vcfTable = cbind(vcfTable, T_LOD = as.numeric(tlod_t)) 
     
     # Clean up.
-    rm(tlod_l,
-       alt_l,
-       af_l,
-       af_norm_l,
-       dp_l,
-       dp_norm_l,
-       af_t,
-       af_norm_t,
-       tlod_t,
-       refs_t,
-       ma_t,
-       alts_t,
-       tnctx_t)
-  }
+    rm(tlod_t,tlod_l)
+  } 
   
   gc()
   
@@ -795,8 +874,6 @@ processVcf <- function(csvPath, session) {
   # Put all the relevant information together in the global vcfFile list.   
   vcfFile <- list(pathname=csvPath, selectedSample=sampleNames[1], tumourSampleName=tumourSampleName, normalSampleName=normalSampleName, data=vcfTable, filterTypes=fTypes, filterDescriptions=filterDescriptions, cosmicSignatures=v3signatures, activeFilters=NULL, dp_breaks=NULL, xmin=NULL)
   
-  # Record it in the plot_data object. 
-  plot_data$vcfFile <<- vcfFile 
   
   # Annotation stuff....
   
@@ -870,6 +947,45 @@ processVcf <- function(csvPath, session) {
   # We will refer back to this annotation dataframe for all annotation queries by the user.
   #
   # TODO!!!! Take out match(coding$QUERYID, vcfTable$OIDX) to a local variable from next line to speed it up.
+  
+  ######################DEBUG, UNCOMMENT IF NEEDED################################
+  
+  #CHROM = vcfTable$CHROM[match(coding$QUERYID, vcfTable$OIDX)]
+  #VARIANT = ranges(vcf[match(coding$QUERYID, vcfTable$OIDX),tumourSlotNum])
+  #AF = vcfTable$AF[match(coding$QUERYID, vcfTable$OIDX)]
+  #DP = vcfTable$DP[match(coding$QUERYID, vcfTable$OIDX)]
+  #GENE_SYMBOL=geneNames
+  #QUERYID = coding$QUERYID
+  #CONSEQUENCE = coding$CONSEQUENCE
+  #TXID = coding$TXID
+  #TXNAME = tx2txid[coding$TXID,"TXNAME"]
+  #PROTEIN_MOD_START = p_loc_start
+  #PROTEIN_ORIG_LENGTH = (((dm3_txlens$cds_len[match_idx])/3)-1)
+  #REFAA = coding$REFAA
+  #VARAA = coding$VARAA
+  
+  
+  #print("###########################")
+  #print(length(CHROM))
+  #print(length(VARIANT))
+  #print(length(AF))
+  #print(length(DP))
+  #print(length(GENE_SYMBOL))
+  #print(length(QUERYID))
+  #print(length(CONSEQUENCE))
+  #print(length(TXID))
+  #print(length(TXNAME))
+  #print(length(PROTEIN_MOD_START))
+  #print(length(PROTEIN_ORIG_LENGTH))
+  #print(length(REFAA))
+  #print(length(VARAA))
+  
+  #print("###########################")
+  
+  
+  ###############################################################
+  
+  
   geneAnnotateDf <<- data.frame(CHROM = vcfTable$CHROM[match(coding$QUERYID, vcfTable$OIDX)],
                                 VARIANT = ranges(vcf[match(coding$QUERYID, vcfTable$OIDX),tumourSlotNum]),
                                 AF = vcfTable$AF[match(coding$QUERYID, vcfTable$OIDX)],
@@ -884,13 +1000,20 @@ processVcf <- function(csvPath, session) {
                                 REFAA = coding$REFAA,
                                 VARAA = coding$VARAA)
   
+  
   # To fix bug with some MuTect2 GATK3 files.  
   # In GATK3 some variants are rejected without listing a TLOD value.
   # To be pragmatic, we will just remove these variants from our analysis so NA's are
   # not introduced down the line.
-  vcfTable = vcfTable[!is.na(vcfTable$T_LOD),]
+  if(any(grepl("^TLOD$",colnames(info(vcf)))))
+  {
+    vcfTable = vcfTable[!is.na(vcfTable$T_LOD),]
+  }
+  
   vcfFile$data <- vcfTable
   
+  # Record it in the plot_data object. 
+  plot_data$vcfFile <<- vcfFile 
   
   ##############################################################################################################
   
@@ -1417,7 +1540,7 @@ ui <- shinyUI(
                     
                     HTML(paste0('</div>')),
                     
-                    HTML(paste0('<div id="tlodThresh_slider" class="InvisableAtStart" style="display:inline-block; padding-right: 12px; margin-top: 4px;">')),
+                    HTML(paste0('<div id="depthThresh_slider" class="InvisableAtStart" style="display:inline-block; padding-right: 12px; margin-top: 4px;">')),
                     numericInput("depthThresh", "Depth:", value = 0, min = 0, max = 1000, width = "50px"),
                     HTML(paste0('</div>')),
                     
@@ -1427,10 +1550,10 @@ ui <- shinyUI(
                     
                     htmlOutput("normalNameTag"),
                     
-                    HTML(paste0('<div id="tlodThresh_slider" class="InvisableAtStart" style="display:inline-block; padding-right: 30px; margin-top: 4px;">')),
+                    HTML(paste0('<div id="afCeiling_slider" class="InvisableAtStart" style="display:inline-block; padding-right: 30px; margin-top: 4px;">')),
                     numericInput("afInNormal", "AF ceiling:", value = 0, min = 0, max = 1, step = 0.005, width = "60px"),
                     HTML(paste0('</div>')),
-                    HTML(paste0('<div id="depthThresh_slider" class="InvisableAtStart" style="display:inline-block;">')),
+                    HTML(paste0('<div id="depthInNormThresh_slider" class="InvisableAtStart" style="display:inline-block;">')),
                     numericInput("depthThreshInNormal", "Depth:", value = 0, min = 0, max = 1000, width = "60px"),
                     HTML(paste0('</div>')),
                     
@@ -1912,10 +2035,14 @@ server <- shinyServer(function(input, output, session) {
       
       # Start your depth and tlod filtering.
       
-      if(!is.null(input$tlodThresh)) {
-        # Record anything that has failed either filter list or the T_LOD threshold.
-        secondPassLogicalVector = secondPassLogicalVector | (result$T_LOD <= input$tlodThresh)     
-      }    
+      # Have we got a TLOD attribute in the VCF?
+      if(any(grepl("^T_LOD$",names(result))))
+      {
+        if(!is.null(input$tlodThresh)) {
+          # Record anything that has failed either filter list or the T_LOD threshold.
+          secondPassLogicalVector = secondPassLogicalVector | (result$T_LOD <= input$tlodThresh)     
+        }
+      }
       
       if(!is.null(input$depthThresh)) {
         # Record anything that has failed either filter list or tumour depth threshold.        
@@ -2378,10 +2505,17 @@ server <- shinyServer(function(input, output, session) {
     
     # Check to see if we have MMQ (median-mapping quality) in the info field of our VCF.
     # If not remove the UI element as it's not needed.
-    if(!MMQ_in_info)
-    {
+    #if(!MMQ_in_info)
+    if(!any(grepl("^MMQ$",names(vcfFile$data))))
+    {    
       removeUI("#mmqThresh_div")
-    }    
+    }
+    
+    
+    if(!any(grepl("^T_LOD$",names(vcfFile$data))))
+    {
+      removeUI("#tlodThresh_slider")
+    }  
     
     # When the div is loaded expose the sliders.
     # No point in having sliders etc. hanging around unless they are connected to something....
