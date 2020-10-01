@@ -116,6 +116,7 @@ while ( TRUE ) {
 }
 close(con)
 
+
 extenInsetFnMapList = paste0('if(insetFn == "',extenInsetFnMapList,'") { return(exten_fn_',extenInsetFnMapList,'(result, xMin,xMax))}', sep="")
 extenInsetFnMapList = paste(extenInsetFnMapList, collapse="\n")
 extenInsetFnMapList = paste('exten_makeCall <- function(insetFn,result, xMin,xMax) {', extenInsetFnMapList, "}\n", sep="\n")
@@ -251,7 +252,9 @@ processVcf <- function(csvPath, session) {
   session$sendCustomMessage("changeBackgroundImage_h_id", list(eName = "selectDiv", img = "selectVcf_loading.png"))
   
   # Parse the filter names and descriptions from the VCF metadata.
-  filetype = summary(file(csvPath))$class
+  con = file(csvPath)
+  filetype = summary(con)$class
+  close(con)
   
   con = NULL
   
@@ -358,8 +361,9 @@ processVcf <- function(csvPath, session) {
     
     
     
-  } 
-  close(con)
+  }
+  close(con) 
+
   
   # If GATK3 was not found in metadata and no tumour/normal sample names were
   # found in the metadata then assume we're dealing with GATK4 with tumour slot 1
@@ -527,7 +531,7 @@ processVcf <- function(csvPath, session) {
     mmq_l = info(vcf)$MMQ
   }
   
-  print(paste0(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>",start_time,"<<<<<<<<<<<<<<<<<<<<<<<<<<<"))
+  cat(paste0(">>>>>>>Parsing VCF start, ",start_time,"<<<<<<<\n"))
   
   
   # Format field differes between earlier versions (GATK3 & GATK4) of Mutect2.
@@ -585,7 +589,7 @@ processVcf <- function(csvPath, session) {
   # If so, for each multiallelic record, pick the one with the highest TLOD to use.  
   if(any(maLogicV))
   {
-    print("Processing records with multiple possible allels.")
+    cat(">>Processing records with multiple possible allels<<\n")
     # Indices to Multiallelic entries.
     maIdx = which(maLogicV)
     # Indices to single allelic entries.
@@ -723,8 +727,8 @@ processVcf <- function(csvPath, session) {
   
   end_time <- Sys.time()
   
-  print(paste0(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>",end_time,"<<<<<<<<<<<<<<<<<<<<<<<<<<<"))
-  print(paste0(">>>>>>>>>>>>>>>>>>>>>>>>>>>duration: ",(end_time - start_time),"<<<<<<<<<<<<<<<<<<<<"))
+  cat(paste0(">>>>>>>>>>>done, ",end_time,".<<<<<<<<<<<<<<<\n"))
+  cat(paste0(">>>>>>>>>>>>>>duration: ",round((end_time - start_time),digits=4),"<<<<<<<<<<<<<<<<<<<<<<\n"))
   
   
   #    print(length(as.character(seqnames(vcf[,tumourSlotNum]))))
@@ -1007,7 +1011,12 @@ processVcf <- function(csvPath, session) {
   # not introduced down the line.
   if(any(grepl("^TLOD$",colnames(info(vcf)))))
   {
-    vcfTable = vcfTable[!is.na(vcfTable$T_LOD),]
+    tlodNas = is.na(vcfTable$T_LOD)
+    if(sum(tlodNas) > 0)
+    {
+      warning(paste0("Removing ", sum(tlodNas), " records for which no TLOD is included."))
+      vcfTable = vcfTable[!tlodNas,]
+    }
   }
   
   vcfFile$data <- vcfTable
@@ -1723,7 +1732,7 @@ server <- shinyServer(function(input, output, session) {
       # note... can't get ggsave to work properly, giving up..
       
       # High resolution png.
-      png(filename=outputFileFullPath, height = 800, width = 2400, res = 300)
+      png(filename=outputFileFullPath, height = 1400, width = 2400, res = 300)
       plot(TopOneGgplot)
       dev.off()
       
@@ -1737,9 +1746,7 @@ server <- shinyServer(function(input, output, session) {
       # So for our image,
       # height = 12.5, width = 25
       # note... can't get ggsave to work properly, giving up..
-      # This section of comments now redundant..
-      
-      
+      # This section of comments now redundant.     
     }
     else if(!is.null(targetVcfGgplot))
     {
